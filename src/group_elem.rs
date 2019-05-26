@@ -1,7 +1,5 @@
-use crate::constants::{MODBYTES, GroupG1_SIZE};
+use crate::constants::GroupG1_SIZE;
 use crate::types::{BigNum, GroupG1};
-#[macro_use]
-use crate::macros;
 use crate::utils::hash_msg;
 use crate::errors::ValueError;
 use std::cmp::Ordering;
@@ -198,7 +196,7 @@ impl From<&GroupG1> for GroupElement {
 
 impl PartialEq for GroupElement {
     fn eq(&self, other: &GroupElement) -> bool {
-        let mut l = self.clone();
+        let l = self.clone();
         let mut r = other.clone();
         l.value.equals(&mut r.value)
     }
@@ -588,7 +586,7 @@ mod test {
         let b = GroupElement::random(None);
         let c = GroupElement::random(None);
 
-        let mut sum =  a + b + c;
+        let sum =  a + b + c;
 
         let mut expected_sum = GroupElement::new();
         expected_sum = expected_sum.plus(&a);
@@ -623,7 +621,7 @@ mod test {
     #[test]
     fn test_wnaf_mul() {
         for _ in 0..100 {
-            let mut a = GroupElement::random(None);
+            let a = GroupElement::random(None);
             let r = FieldElement::random(None);
             let expected = a * r;
 
@@ -767,7 +765,7 @@ mod test {
         let count = 100;
         let points: Vec<GroupElement> = (0..100).map(|_| GroupElement::random(None)).collect();
         let mut R = GroupElement::random(None);
-        let mut start = Instant::now();
+        let start = Instant::now();
         for i in 0..count {
             R = R + points[i];
         }

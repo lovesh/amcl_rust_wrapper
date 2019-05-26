@@ -961,7 +961,7 @@ mod test {
         let count = 100;
         let points: Vec<FieldElement> = (0..100).map(|_| FieldElement::random(None)).collect();
         let mut R = FieldElement::random(None);
-        let mut start = Instant::now();
+        let start = Instant::now();
         for i in 0..count {
             R = R + points[i];
         }
