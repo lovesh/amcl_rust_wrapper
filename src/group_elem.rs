@@ -3,7 +3,7 @@ use crate::types::{BigNum, GroupG1};
 use crate::utils::hash_msg;
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul, Neg};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use std::fmt;
 use std::slice::Iter;
@@ -55,20 +55,23 @@ impl GroupElement {
         GroupG1::generator().into()
     }
 
-    pub fn random(order: Option<&BigNum>) -> Self {
-        let n = FieldElement::random(order);
+    /// Return a random group element by generating a random field element and multiplying the group generator by the field element.
+    pub fn random() -> Self {
+        let n = FieldElement::random();
         Self::generator().scalar_mul_const_time(&n)
     }
 
+    /// Check if the the point is the identity element of the group
     pub fn is_identity(&self) -> bool {
         self.value.is_infinity()
     }
 
+    /// Set the point to the identity element of the group
     pub fn set_to_identity(&mut self) {
         self.value.inf()
     }
 
-    /// Hash message and return output as group element
+    /// Hash an arbitrary sized message using SHAKE and return output as group element
     pub fn from_msg_hash(msg: &[u8]) -> GroupElement {
         GroupG1::mapit(&hash_msg(msg)).into()
     }
@@ -81,6 +84,7 @@ impl GroupElement {
         bytes.to_vec()
     }
 
+    /// Return underlying ECP
     pub fn to_ecp(&self) -> GroupG1 {
         self.value.clone()
     }
@@ -131,6 +135,7 @@ impl GroupElement {
         GroupElement::wnaf_mul(&table, &wnaf)
     }
 
+    /// Return the double of the group element
     pub fn double(&self) -> Self {
         let mut d = self.value.clone();
         d.dbl();
@@ -141,7 +146,7 @@ impl GroupElement {
         self.value.dbl();
     }
 
-    // Return multiples of itself. eg. Given `n`=5, returns self, 2*self, 3*self, 4*self, 5*self
+    /// Return multiples of itself. eg. Given `n`=5, returns self, 2*self, 3*self, 4*self, 5*self
     pub fn get_multiples(&self, n: usize) -> Vec<GroupElement> {
         let mut res = vec![self.clone()];
         for i in 2..=n {
@@ -173,6 +178,7 @@ impl GroupElement {
         result
     }
 
+    /// Returns hex string
     pub fn to_hex(&self) -> String {
         self.to_ecp().tostring()
     }
@@ -271,6 +277,26 @@ impl Mul<&FieldElement> for &GroupElement {
     }
 }
 
+impl Neg for GroupElement {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        let mut t = self.to_ecp();
+        t.neg();
+        t.into()
+    }
+}
+
+impl Neg for &GroupElement {
+    type Output = GroupElement;
+
+    fn neg(self) -> Self::Output {
+        let mut t = self.to_ecp();
+        t.neg();
+        t.into()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GroupElementVector {
     elems: Vec<GroupElement>
@@ -328,6 +354,26 @@ impl GroupElementVector {
             scaled.push(self[i] * n)
         }
         scaled.into()
+    }
+
+    /// Add 2 vectors
+    pub fn plus(&self, b: &GroupElementVector) ->  Result<GroupElementVector, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut sum_vector = GroupElementVector::with_capacity(self.len());
+        for i in 0..self.len() {
+            sum_vector.push(self[i] + b.elems[i])
+        }
+        Ok(sum_vector)
+    }
+
+    /// Subtract 2 vectors
+    pub fn minus(&self, b: &GroupElementVector) ->  Result<GroupElementVector, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut diff_vector = GroupElementVector::with_capacity(self.len());
+        for i in 0..self.len() {
+            diff_vector.push(self[i] - b[i])
+        }
+        Ok(diff_vector)
     }
 
     /// Computes inner product of 2 vectors, one of field elements and other of group elements.
@@ -558,10 +604,20 @@ mod test {
     use std::time::{Duration, Instant};
 
     #[test]
+    fn test_negating_group_elems() {
+        let b = GroupElement::random();
+        let neg_b = -b;
+        assert_ne!(b, neg_b);
+        let neg_neg_b = -neg_b;
+        assert_eq!(b, neg_neg_b);
+        assert_eq!(b+neg_b, GroupElement::identity());
+    }
+
+    #[test]
     fn test_scalar_mult_operators() {
         for _ in 0..10 {
-            let g = GroupElement::random(None);
-            let f = FieldElement::random(None);
+            let g = GroupElement::random();
+            let f = FieldElement::random();
             let m = g.scalar_mul_const_time(&f);
             // Operands can be in any order
             assert_eq!(m, g * f);
@@ -572,19 +628,19 @@ mod test {
     #[test]
     fn test_binary_scalar_mul() {
         for _ in 0..10 {
-            let a = FieldElement::random(None);
-            let b = FieldElement::random(None);
-            let g = GroupElement::random(None);
-            let h = GroupElement::random(None);
+            let a = FieldElement::random();
+            let b = FieldElement::random();
+            let g = GroupElement::random();
+            let h = GroupElement::random();
             assert_eq!(g * a + h * b, g.binary_scalar_mul(&h, &a, &b))
         }
     }
 
     #[test]
     fn test_group_elem_addition() {
-        let a = GroupElement::random(None);
-        let b = GroupElement::random(None);
-        let c = GroupElement::random(None);
+        let a = GroupElement::random();
+        let b = GroupElement::random();
+        let c = GroupElement::random();
 
         let sum =  a + b + c;
 
@@ -598,7 +654,7 @@ mod test {
     #[test]
     fn test_multiples() {
         for _ in 0..10 {
-            let a = GroupElement::random(None);
+            let a = GroupElement::random();
             let mults = a.get_multiples(17);
             for i in 1..=17 {
                 assert_eq!(mults[i-1], a * FieldElement::from(i as u8));
@@ -608,7 +664,7 @@ mod test {
 
     #[test]
     fn test_NafLookupTable5() {
-        let a = GroupElement::random(None);
+        let a = GroupElement::random();
         let x = [1, 3, 5, 7, 9, 11, 13, 15];
         let table = NafLookupTable5::from(&a);
         for i in x.iter() {
@@ -621,8 +677,8 @@ mod test {
     #[test]
     fn test_wnaf_mul() {
         for _ in 0..100 {
-            let a = GroupElement::random(None);
-            let r = FieldElement::random(None);
+            let a = GroupElement::random();
+            let r = FieldElement::random();
             let expected = a * r;
 
             let table = NafLookupTable5::from(&a);
@@ -641,7 +697,7 @@ mod test {
             let gen: GroupElement = GroupElement::generator();
 
             for i in 0..70 {
-                fs.push(FieldElement::random(None));
+                fs.push(FieldElement::random());
                 gs.push(gen.scalar_mul_const_time(&fs[i]));
             }
 
@@ -675,8 +731,8 @@ mod test {
         let n = 64;
 
         for _ in 0..n {
-            fs.push(FieldElement::random(None));
-            gs.push(GroupElement::random(None));
+            fs.push(FieldElement::random());
+            gs.push(GroupElement::random());
         }
 
         let gv = GroupElementVector::from(gs.as_slice());
@@ -736,8 +792,8 @@ mod test {
         let w = 5;
 
         for _ in 0..n {
-            fs.push(FieldElement::random(None));
-            gs.push(GroupElement::random(None));
+            fs.push(FieldElement::random());
+            gs.push(GroupElement::random());
         }
 
         let gv = GroupElementVector::from(gs.as_slice());
@@ -763,8 +819,8 @@ mod test {
     #[test]
     fn timing_group_elem_addition() {
         let count = 100;
-        let points: Vec<GroupElement> = (0..100).map(|_| GroupElement::random(None)).collect();
-        let mut R = GroupElement::random(None);
+        let points: Vec<GroupElement> = (0..100).map(|_| GroupElement::random()).collect();
+        let mut R = GroupElement::random();
         let start = Instant::now();
         for i in 0..count {
             R = R + points[i];

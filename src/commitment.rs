@@ -21,9 +21,11 @@ pub fn commit_to_field_element_vectors(g: &GroupElementVector, h: &GroupElementV
     combined_g.extend_from_slice(g.as_slice());
     combined_g.extend_from_slice(h.as_slice());
     combined_g.push(*u);
+
     let mut combined_f: Vec<FieldElement> = vec![];
     combined_f.extend_from_slice(a.as_slice());
     combined_f.extend_from_slice(b.as_slice());
     combined_f.push(*c);
+
     GroupElementVector::from(combined_g).inner_product_const_time(&FieldElementVector::from(combined_f))
 }

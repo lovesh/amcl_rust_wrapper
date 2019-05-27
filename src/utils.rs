@@ -10,7 +10,7 @@ use crate::types::{BigNum, DoubleBigNum};
 use amcl::sha3::{SHAKE256, SHA3};
 
 
-// Hash message and return output of size equal to curve modulus
+/// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
     let mut hasher = SHA3::new(SHAKE256);
     for i in 0..msg.len(){
@@ -134,7 +134,6 @@ pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
     u.shl(k);
     u.shl(k);
     // div returns floored value
-    // div can be replaced with bitwise ops but since this is seldom done, its fine.
     let u = u.div(&CurveOrder);
 
     // v = 2^(k+1)
@@ -163,7 +162,7 @@ mod test {
 
         // TODO: Compare adding raw BIGs and FieldElement to check the overhead of the abstraction
         let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
         let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
         let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
         let mut res_mul = BIG::new_int(1 as isize);
@@ -238,10 +237,10 @@ mod test {
         let mut r2 = vec![];
 
         for _ in 0..count {
-            a.push(FieldElement::random(None).to_bignum());
-            b.push(FieldElement::random(None).to_bignum());
-            g.push(GroupElement::random(None).to_ecp());
-            h.push(GroupElement::random(None).to_ecp());
+            a.push(FieldElement::random().to_bignum());
+            b.push(FieldElement::random().to_bignum());
+            g.push(GroupElement::random().to_ecp());
+            h.push(GroupElement::random().to_ecp());
         }
 
         let mut start = Instant::now();
@@ -305,7 +304,7 @@ mod test {
     fn timing_rmod_with_barrett_reduction() {
         let (k, u, v) = (*constants::BarrettRedc_k, *constants::BarrettRedc_u, *constants::BarrettRedc_v);
         let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
         let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
 
         let mut sum = bigs[0].clone();

@@ -6,7 +6,7 @@ use crate::types::{BigNum, DoubleBigNum};
 use crate::utils::{get_seeded_RNG, hash_msg, barrett_reduction};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, Neg};
 use std::fmt;
 use core::fmt::Display;
 use crate::group_elem::GroupElement;
@@ -66,9 +66,9 @@ impl FieldElement {
         o
     }
 
-    /// Get a random field element of the curve order. Avoid 0.
-    pub fn random(order: Option<&BigNum>) -> Self {
-        Self::random_field_element(order).into()
+    /// Return a random non-zero field element
+    pub fn random() -> Self {
+        Self::random_field_element().into()
     }
 
     pub fn is_zero(&self) -> bool {
@@ -92,7 +92,7 @@ impl FieldElement {
         v
     }
 
-    /// Hash message and return output as field element
+    /// Hash an arbitrary sized message using SHAKE and return output as a field element
     pub fn from_msg_hash(msg: &[u8]) -> Self {
         // TODO: Ensure result is not 0
         let h = &hash_msg(msg);
@@ -102,12 +102,14 @@ impl FieldElement {
 
     /// Add a field element to itself. `self = self + b`
     pub fn add_assign_(&mut self, b: &Self) {
+        // Not using `self.plus` to avoid cloning. Breaking the abstraction a bit for performance.
         self.value.add(&b.value);
         self.value.rmod(&CurveOrder);
     }
 
     /// Subtract a field element from itself. `self = self - b`
     pub fn sub_assign_(&mut self, b: &Self) {
+        // Not using `self.minus` to avoid cloning. Breaking the abstraction a bit for performance.
         let neg_b = BigNum::modneg(&b.value, &CurveOrder);
         self.value.add(&neg_b);
         self.value.rmod(&CurveOrder);
@@ -151,7 +153,6 @@ impl FieldElement {
 
     /// Return negative of field element
     pub fn negation(&self) -> Self {
-        // TODO: Implement Neg operator
         let zero = Self::zero();
         zero.minus(&self)
     }
@@ -219,15 +220,13 @@ impl FieldElement {
         return b_vec;
     }
 
-    fn random_field_element(order: Option<&BigNum>) -> BigNum {
+    /// Return a random non-zero field element
+    fn random_field_element() -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
         let entropy_size = 256;
         let mut r = get_seeded_RNG(entropy_size);
-        let n = match order {
-            Some(o) => BigNum::randomnum(&o, &mut r),
-            None => BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r)
-        };
-        if n.iszilch() { Self::random_field_element(order) } else { n }
+        let n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
+        if n.iszilch() { Self::random_field_element() } else { n }
     }
 
     /// Conversion to wNAF, i.e. windowed Non Adjacent form
@@ -323,6 +322,7 @@ impl FieldElement {
         (inverses, all_inv)
     }
 
+    /// Returns hex string
     pub fn to_hex(&self) -> String {
         self.to_bignum().tostring()
     }
@@ -546,6 +546,22 @@ impl Mul<&GroupElement> for &FieldElement {
     }
 }
 
+impl Neg for FieldElement {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        self.negation()
+    }
+}
+
+impl Neg for &FieldElement {
+    type Output = FieldElement;
+
+    fn neg(self) -> Self::Output {
+        self.negation()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct FieldElementVector {
     elems: Vec<FieldElement>
@@ -586,8 +602,8 @@ impl FieldElementVector {
     }
 
     /// Get a vector of random field elements
-    pub fn random(size: usize, order: Option<&BigNum>) -> Self {
-        (0..size).map( | _ | FieldElement::random(order)).collect::<Vec<FieldElement>>().into()
+    pub fn random(size: usize) -> Self {
+        (0..size).map( | _ | FieldElement::random()).collect::<Vec<FieldElement>>().into()
     }
 
     pub fn as_slice(&self) -> &[FieldElement] {
@@ -841,18 +857,19 @@ mod test {
 
     #[test]
     fn test_negating_field_elems() {
-        let a = FieldElement::from(100u32);
-        let neg_a = a.negation();
-        assert_ne!(a, neg_a);
-        let neg_neg_a = neg_a.negation();
-        assert_eq!(a, neg_neg_a);
+        let b = FieldElement::random();
+        let neg_b = -b;
+        assert_ne!(b, neg_b);
+        let neg_neg_b = -neg_b;
+        assert_eq!(b, neg_neg_b);
+        assert_eq!(b+neg_b, FieldElement::zero());
     }
 
     #[test]
     fn test_field_elem_addition() {
-        let a = FieldElement::random(None);
-        let b = FieldElement::random(None);
-        let c = FieldElement::random(None);
+        let a = FieldElement::random();
+        let b = FieldElement::random();
+        let c = FieldElement::random();
 
         let sum =  a + b + c;
 
@@ -865,9 +882,9 @@ mod test {
 
     #[test]
     fn test_field_elem_subtraction() {
-        let a = FieldElement::random(None);
-        let b = FieldElement::random(None);
-        let c = FieldElement::random(None);
+        let a = FieldElement::random();
+        let b = FieldElement::random();
+        let c = FieldElement::random();
 
         let sum =  a - b - c;
 
@@ -927,7 +944,7 @@ mod test {
     fn timing_multiplication_inversion() {
         // Timing multiplication and inversion
         let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
 
         let mut res_mul = FieldElement::one();
         let mut start = Instant::now();
@@ -959,8 +976,8 @@ mod test {
     #[test]
     fn timing_field_elem_addition() {
         let count = 100;
-        let points: Vec<FieldElement> = (0..100).map(|_| FieldElement::random(None)).collect();
-        let mut R = FieldElement::random(None);
+        let points: Vec<FieldElement> = (0..100).map(|_| FieldElement::random()).collect();
+        let mut R = FieldElement::random();
         let start = Instant::now();
         for i in 0..count {
             R = R + points[i];

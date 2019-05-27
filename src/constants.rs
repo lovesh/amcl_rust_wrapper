@@ -11,7 +11,6 @@ lazy_static! {
     pub static ref GeneratorG1: GroupG1 = GroupG1::generator();
     pub static ref CurveOrder: BigNum = BigNum::new_ints(&rom::CURVE_ORDER);
     pub static ref FieldElementZero: BigNum = BigNum::new();
-    //let pub static ref (BarrettRedc_k: usize, BarrettRedc_u: BigNum, BarrettRedc_v: BigNum) = barrett_reduction_params(&CurveOrder);
     pub static ref BarrettRedc_k: usize = CurveOrder.nbits();
     pub static ref BarrettRedc_u: BigNum = {
         let k = CurveOrder.nbits();
@@ -21,7 +20,7 @@ lazy_static! {
         u.shl(k);
         u.shl(k);
 
-        // div can be replaced with bitwise ops but since this is seldom done, its fine.
+        // div returns floored value
         u.div(&CurveOrder)
     };
 
