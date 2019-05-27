@@ -1,9 +1,9 @@
 # amcl_rust_wrapper
 
-Wraps some parts of [AMCL](https://github.com/miracl/amcl) to provide a nice abstraction to work with finite field elements and group elements when working with elliptic curves.   
-Overloads +, -, *, +=, -= to use with field as well as group elements.  The overloaded operators correspond to constant time methods. But for scalar multiplication, variable time algorithms are present but can be used by calling methods only. 
-Provides abstraction for creating vectors of field elements or group elements and then scale, add, subtract, take inner product or Hadamard product.   
-Additionally, implements some extra algorithms like variable time scalar multiplication using wNAF, constant time and variable time multi-scalar multiplication, batch (simultaneous) inversion and Barrett reduction.
+- Wraps some parts of [AMCL](https://github.com/miracl/amcl) to provide a nice abstraction to work with finite field elements and group elements when working with elliptic curves.   
+- Overloads +, -, *, +=, -= to use with field as well as group elements.  The overloaded operators correspond to constant time methods. But for scalar multiplication, variable time algorithms are present but can be used by calling methods only. 
+- Provides abstraction for creating vectors of field elements or group elements and then scale, add, subtract, take inner product or Hadamard product.   
+- Additionally, implements some extra algorithms like variable time scalar multiplication using wNAF, constant time and variable time multi-scalar multiplication, batch (simultaneous) inversion and Barrett reduction.
 
 # Examples
 1. Create some random field elements or group elements and do some basic additions/subtraction/multiplication 
