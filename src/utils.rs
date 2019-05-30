@@ -208,7 +208,7 @@ mod test {
         }
 
         // Fixme: add in FP crashes while adding 100 elems, maybe my amcl code is old
-        let c = 50;
+        let c = 100;
         start = Instant::now();
         let mut r = bigs[0];
         for i in 0..c {

@@ -135,19 +135,13 @@ impl FieldElement {
     /// Multiply 2 field elements modulus the order of the curve.
     /// (field_element_a * field_element_b) % curve_order
     pub fn multiply(&self, b: &Self) -> Self {
-        let mut a = self.value.clone();
-        a.rmod(&CurveOrder);
-        let mut b = b.value.clone();
-        b.rmod(&CurveOrder);
-        let d = BigNum::mul(&a, &b);
+        let d = BigNum::mul(&self.value, &b.value);
         Self::reduce_dmod_curve_order(&d).into()
     }
 
     /// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
     pub fn square(&self) -> Self {
-        let mut a = self.value.clone();
-        a.rmod(&CurveOrder);
-        let d = BigNum::sqr(&a);
+        let d = BigNum::sqr(&self.value);
         Self::reduce_dmod_curve_order(&d).into()
     }
 
@@ -976,12 +970,68 @@ mod test {
     #[test]
     fn timing_field_elem_addition() {
         let count = 100;
-        let points: Vec<FieldElement> = (0..100).map(|_| FieldElement::random()).collect();
+        let points: Vec<FieldElement> = (0..count).map(|_| FieldElement::random()).collect();
         let mut R = FieldElement::random();
         let start = Instant::now();
         for i in 0..count {
             R = R + points[i];
         }
         println!("Addition time for {} elems = {:?}", count, start.elapsed());
+    }
+
+    #[test]
+    fn timing_field_elem_multiplication() {
+        let count = 10000;
+        let l: Vec<BigNum> = (0..count).map(|_| FieldElement::random().to_bignum()).collect();
+        let r: Vec<BigNum> = (0..count).map(|_| FieldElement::random().to_bignum()).collect();
+        let mut o1 = vec![];
+        let mut o2 = vec![];
+
+        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
+        let mut start = Instant::now();
+        for i in 0..count {
+            let mut a = l[i].clone();
+            a.rmod(&CurveOrder);
+            let mut b = r[i].clone();
+            b.rmod(&CurveOrder);
+            let d = BigNum::mul(&a, &b);
+            o1.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
+        }
+        println!("Mul1 for {} elems = {:?}", count, start.elapsed());
+
+        start = Instant::now();
+        for i in 0..count {
+            let a = l[i].clone();
+            let b = r[i].clone();
+            let d = BigNum::mul(&a, &b);
+            o2.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
+        }
+        println!("Mul2 for {} elems = {:?}", count, start.elapsed());
+
+        for i in 0..count {
+            assert_eq!(BigNum::comp(&o1[i], &o2[i]), 0);
+        }
+
+        let mut x = BigNum::new_int(1isize);
+        start = Instant::now();
+        for i in 0..count {
+            x.rmod(&CurveOrder);
+            let mut b = o1[i].clone();
+            b.rmod(&CurveOrder);
+            let d = BigNum::mul(&x, &b);
+            x = barrett_reduction(&d, &CurveOrder, k, &u, &v);
+        }
+        println!("Mul1 all for {} elems = {:?}", count, start.elapsed());
+
+        let mut y = BigNum::new_int(1isize);
+        start = Instant::now();
+        for i in 0..count {
+            let mut b = o2[i].clone();
+            let d = BigNum::mul(&y, &b);
+            y = barrett_reduction(&d, &CurveOrder, k, &u, &v);
+        }
+        println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
+
+        assert_eq!(BigNum::comp(&x, &y), 0);
     }
 }
