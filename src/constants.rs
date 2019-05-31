@@ -1,5 +1,5 @@
-use super::BLSCurve::rom;
-use super::BLSCurve::big::{NLEN as curve_NLEN, MODBYTES as curve_MODBYTES};
+use super::ECCurve::rom;
+use super::ECCurve::big::{NLEN as curve_NLEN, MODBYTES as curve_MODBYTES};
 use super::types::{BigNum, DoubleBigNum, GroupG1};
 
 pub const MODBYTES: usize = curve_MODBYTES;

@@ -981,7 +981,7 @@ mod test {
 
     #[test]
     fn timing_field_elem_multiplication() {
-        let count = 10000;
+        let count = 1000;
         let l: Vec<BigNum> = (0..count).map(|_| FieldElement::random().to_bignum()).collect();
         let r: Vec<BigNum> = (0..count).map(|_| FieldElement::random().to_bignum()).collect();
         let mut o1 = vec![];
