@@ -4,6 +4,13 @@ version = "0.1.0"
 authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
 edition = "2018"
 
+[features]
+default = ["bls381"]
+bls381 = []
+bn254 = []
+secp256k1 = []
+ed25519 = []
+
 [dependencies]
 rand = "0.6"
 lazy_static = "1.3.0"
@@ -13,3 +20,4 @@ byteorder = "1.3.1"
 git = "https://github.com/miracl/amcl"
 branch = "master"
 features = ["bn254", "bls381", "secp256k1", "ed25519"]
+default = ["bls381"]
