@@ -10,6 +10,7 @@ use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, Neg};
 use std::fmt;
 use core::fmt::Display;
 use crate::group_elem::GroupElement;
+use crate::group_elem_g1::G1;
 use std::slice::Iter;
 use byteorder::BigEndian;
 
@@ -508,37 +509,44 @@ impl<'a> Mul<&'a FieldElement> for &FieldElement {
     }
 }
 
-impl Mul<GroupElement> for FieldElement {
-    type Output = GroupElement;
+macro_rules! impl_scalar_mul_ops {
+    ( $group_element:ident ) => {
 
-    fn mul(self, other: GroupElement) -> GroupElement {
-        other.scalar_mul_const_time(&self)
-    }
+        impl Mul<$group_element> for FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: $group_element) -> $group_element {
+                other.scalar_mul_const_time(&self)
+            }
+        }
+
+        impl Mul<&$group_element> for FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: &$group_element) -> $group_element {
+                other.scalar_mul_const_time(&self)
+            }
+        }
+
+        impl Mul<$group_element> for &FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: $group_element) -> $group_element {
+                other.scalar_mul_const_time(self)
+            }
+        }
+
+        impl Mul<&$group_element> for &FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: &$group_element) -> $group_element {
+                other.scalar_mul_const_time(self)
+            }
+        }
+    };
 }
 
-impl Mul<&GroupElement> for FieldElement {
-    type Output = GroupElement;
-
-    fn mul(self, other: &GroupElement) -> GroupElement {
-        other.scalar_mul_const_time(&self)
-    }
-}
-
-impl Mul<GroupElement> for &FieldElement {
-    type Output = GroupElement;
-
-    fn mul(self, other: GroupElement) -> GroupElement {
-        other.scalar_mul_const_time(self)
-    }
-}
-
-impl Mul<&GroupElement> for &FieldElement {
-    type Output = GroupElement;
-
-    fn mul(self, other: &GroupElement) -> GroupElement {
-        other.scalar_mul_const_time(self)
-    }
-}
+impl_scalar_mul_ops!(G1);
 
 impl Neg for FieldElement {
     type Output = Self;

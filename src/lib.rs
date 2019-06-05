@@ -20,6 +20,9 @@ pub mod macros;
 
 pub mod utils;
 
+#[macro_use]
 pub mod field_elem;
+#[macro_use]
 pub mod group_elem;
+pub mod group_elem_g1;
 pub mod commitment;

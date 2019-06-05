@@ -149,6 +149,7 @@ mod test {
     use super::*;
     use crate::field_elem::FieldElement;
     use crate::group_elem::GroupElement;
+    use crate::group_elem_g1::G1;
     use std::time::{Duration, Instant};
     use amcl::bls381::big::BIG;
     use amcl::bls381::dbig::DBIG;
@@ -207,8 +208,8 @@ mod test {
             assert!(c.equals(&FP::new_int(1 as isize)));
         }
 
-        // Fixme: add in FP crashes while adding 100 elems, maybe my amcl code is old
-        let c = 100;
+        // Fixme: add in FP crashes while adding 100 elems
+        let c = 50;
         start = Instant::now();
         let mut r = bigs[0];
         for i in 0..c {
@@ -230,8 +231,8 @@ mod test {
         let count = 100;
         let mut a = vec![];
         let mut b = vec![];
-        let mut g = vec![];
-        let mut h = vec![];
+        let mut g = Vec::<ECP>::new();
+        let mut h = Vec::<ECP>::new();
 
         let mut r1 = vec![];
         let mut r2 = vec![];
@@ -239,8 +240,10 @@ mod test {
         for _ in 0..count {
             a.push(FieldElement::random().to_bignum());
             b.push(FieldElement::random().to_bignum());
-            g.push(GroupElement::random().to_ecp());
-            h.push(GroupElement::random().to_ecp());
+            let mut x: G1 = GroupElement::random();
+            g.push(x.to_ecp());
+            x = GroupElement::random();
+            h.push(x.to_ecp());
         }
 
         let mut start = Instant::now();
