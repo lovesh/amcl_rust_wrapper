@@ -1,10 +1,6 @@
 use crate::types::{BigNum, GroupG1};
-use crate::utils::hash_msg;
 use crate::errors::ValueError;
-use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul, Neg};
 use crate::field_elem::FieldElement;
-use std::fmt;
 use std::slice::Iter;
 
 
@@ -184,6 +180,96 @@ macro_rules! impl_group_elem_ops {
                 let mut t = self.to_ecp();
                 t.neg();
                 t.into()
+            }
+        }
+    }
+}
+
+pub trait GroupElementVector<T>: Sized {
+    fn new(size: usize) -> Self;
+
+    fn with_capacity(capacity: usize) -> Self;
+
+    fn as_slice(&self) -> &[T];
+
+    fn len(&self) -> usize;
+
+    fn push(&mut self, value: T);
+
+    fn append(&mut self, other: &mut Self);
+
+    /// Compute sum of all elements of a vector
+    fn sum(&self) -> T;
+
+    /// Multiply each field element of the vector with another given field
+    /// element `n` (scale the vector)
+    fn scale(&mut self, n: &FieldElement);
+
+    fn scaled_by(&self, n: &FieldElement) -> Self;
+
+    /// Add 2 vectors
+    fn plus(&self, b: &Self) ->  Result<Self, ValueError>;
+
+    /// Subtract 2 vectors
+    fn minus(&self, b: &Self) ->  Result<Self, ValueError>;
+
+    fn iter(&self) -> Iter<T>;
+}
+
+#[macro_export]
+macro_rules! impl_group_elem_vec_ops {
+    ( $group_element:ident, $group_element_vec:ident ) => {
+        impl From<Vec<$group_element>> for $group_element_vec {
+            fn from(x: Vec<$group_element>) -> Self {
+                Self {
+                    elems: x
+                }
+            }
+        }
+
+        impl From<&[$group_element]> for $group_element_vec {
+            fn from(x: &[$group_element]) -> Self {
+                Self {
+                    elems: x.to_vec()
+                }
+            }
+        }
+
+        impl Index<usize> for $group_element_vec {
+            type Output = $group_element;
+
+            fn index(&self, idx: usize) -> &$group_element {
+                &self.elems[idx]
+            }
+        }
+
+        impl IndexMut<usize> for $group_element_vec {
+
+            fn index_mut(&mut self, idx: usize) -> &mut $group_element {
+                &mut self.elems[idx]
+            }
+        }
+
+        impl PartialEq for $group_element_vec {
+            fn eq(&self, other: &Self) -> bool {
+                if self.len() != other.len() {
+                    return false
+                }
+                for i in 0..self.len() {
+                    if self[i] != other[i] {
+                        return false
+                    }
+                }
+                true
+            }
+        }
+
+        impl IntoIterator for $group_element_vec {
+            type Item = $group_element;
+            type IntoIter = ::std::vec::IntoIter<$group_element>;
+
+            fn into_iter(self) -> Self::IntoIter {
+                self.elems.into_iter()
             }
         }
     }

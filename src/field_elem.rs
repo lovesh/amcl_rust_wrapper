@@ -8,11 +8,9 @@ use crate::errors::ValueError;
 use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, Neg};
 use std::fmt;
-use core::fmt::Display;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
 use std::slice::Iter;
-use byteorder::BigEndian;
 
 
 #[macro_export]
@@ -1034,7 +1032,7 @@ mod test {
         let mut y = BigNum::new_int(1isize);
         start = Instant::now();
         for i in 0..count {
-            let mut b = o2[i].clone();
+            let b = o2[i].clone();
             let d = BigNum::mul(&y, &b);
             y = barrett_reduction(&d, &CurveOrder, k, &u, &v);
         }

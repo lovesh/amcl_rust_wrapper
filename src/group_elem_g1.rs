@@ -1,11 +1,10 @@
 use crate::constants::GroupG1_SIZE;
-use crate::types::{BigNum, GroupG1};
+use crate::types::GroupG1;
 use crate::utils::hash_msg;
 use crate::errors::ValueError;
-use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul, Neg};
 use crate::field_elem::{FieldElement, FieldElementVector};
-use crate::group_elem::GroupElement;
+use crate::group_elem::{GroupElement, GroupElementVector};
 
 use std::fmt;
 use std::slice::Iter;
@@ -163,43 +162,41 @@ impl G1 {
 
 impl_group_elem_ops!(G1);
 
-// TODO: Refactor G1Vector with a trait GroupElementVector like GroupElement and G1
 #[derive(Clone, Debug)]
 pub struct G1Vector {
     elems: Vec<G1>
 }
 
-impl G1Vector {
-    pub fn new(size: usize) -> Self {
+impl GroupElementVector<G1> for G1Vector {
+    fn new(size: usize) -> Self {
         Self {
             elems: (0..size).map(|_| G1::new()).collect()
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
+    fn with_capacity(capacity: usize) -> Self {
         Self {
             elems: Vec::<G1>::with_capacity(capacity)
         }
     }
 
-    pub fn as_slice(&self) -> &[G1] {
+    fn as_slice(&self) -> &[G1] {
         &self.elems
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.elems.len()
     }
 
-    pub fn push(&mut self, value: G1) {
+    fn push(&mut self, value: G1) {
         self.elems.push(value)
     }
 
-    pub fn append(&mut self, other: &mut Self) {
+    fn append(&mut self, other: &mut Self) {
         self.elems.append(&mut other.elems)
     }
 
-    /// Compute sum of all elements of a vector
-    pub fn sum(&self) -> G1 {
+    fn sum(&self) -> G1 {
         let mut accum = G1::new();
         for i in 0..self.len() {
             accum += self[i];
@@ -207,15 +204,13 @@ impl G1Vector {
         accum
     }
 
-    /// Multiply each field element of the vector with another given field
-    /// element `n` (scale the vector)
-    pub fn scale(&mut self, n: &FieldElement) {
+    fn scale(&mut self, n: &FieldElement) {
         for i in 0..self.len() {
             self[i] = self[i] * n;
         }
     }
 
-    pub fn scaled_by(&self, n: &FieldElement) -> Self {
+    fn scaled_by(&self, n: &FieldElement) -> Self {
         let mut scaled = Self::with_capacity(self.len());
         for i in 0..self.len() {
             scaled.push(self[i] * n)
@@ -223,8 +218,7 @@ impl G1Vector {
         scaled.into()
     }
 
-    /// Add 2 vectors
-    pub fn plus(&self, b: &G1Vector) ->  Result<G1Vector, ValueError> {
+    fn plus(&self, b: &Self) ->  Result<Self, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = G1Vector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -233,8 +227,7 @@ impl G1Vector {
         Ok(sum_vector)
     }
 
-    /// Subtract 2 vectors
-    pub fn minus(&self, b: &G1Vector) ->  Result<G1Vector, ValueError> {
+    fn minus(&self, b: &Self) ->  Result<Self, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = G1Vector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -243,6 +236,12 @@ impl G1Vector {
         Ok(diff_vector)
     }
 
+    fn iter(&self) -> Iter<G1> {
+        self.as_slice().iter()
+    }
+}
+
+impl G1Vector {
     /// Computes inner product of 2 vectors, one of field elements and other of group elements.
     /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
     pub fn inner_product_const_time(&self, b: &FieldElementVector) -> Result<G1, ValueError> {
@@ -378,66 +377,9 @@ impl G1Vector {
         }
         Ok(r)
     }
-
-    pub fn iter(&self) -> Iter<G1> {
-        self.as_slice().iter()
-    }
-
 }
 
-impl From<Vec<G1>> for G1Vector {
-    fn from(x: Vec<G1>) -> Self {
-        Self {
-            elems: x
-        }
-    }
-}
-
-impl From<&[G1]> for G1Vector {
-    fn from(x: &[G1]) -> Self {
-        Self {
-            elems: x.to_vec()
-        }
-    }
-}
-
-impl Index<usize> for G1Vector {
-    type Output = G1;
-
-    fn index(&self, idx: usize) -> &G1 {
-        &self.elems[idx]
-    }
-}
-
-impl IndexMut<usize> for G1Vector {
-
-    fn index_mut(&mut self, idx: usize) -> &mut G1 {
-        &mut self.elems[idx]
-    }
-}
-
-impl PartialEq for G1Vector {
-    fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false
-        }
-        for i in 0..self.len() {
-            if self[i] != other[i] {
-                return false
-            }
-        }
-        true
-    }
-}
-
-impl IntoIterator for G1Vector {
-    type Item = G1;
-    type IntoIter = ::std::vec::IntoIter<G1>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.elems.into_iter()
-    }
-}
+impl_group_elem_vec_ops!(G1, G1Vector);
 
 pub struct NafLookupTable5([G1; 8]);
 
