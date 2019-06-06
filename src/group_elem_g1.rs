@@ -162,6 +162,14 @@ impl G1 {
 
 impl_group_elem_ops!(G1);
 
+impl From<&[u8; GroupG1_SIZE]> for G1 {
+    fn from(x: &[u8; GroupG1_SIZE]) -> Self {
+        Self {
+            value: GroupG1::frombytes(x)
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct G1Vector {
     elems: Vec<G1>
@@ -412,6 +420,17 @@ mod test {
     use std::time::{Duration, Instant};
 
     #[test]
+    fn test_to_and_from_bytes() {
+        for _ in 0..100 {
+            let x = G1::random();
+            let mut bytes: [u8; GroupG1_SIZE] = [0; GroupG1_SIZE];
+            bytes.copy_from_slice(x.to_bytes().as_slice());
+            let y = G1::from(&bytes);
+            assert_eq!(x, y)
+        }
+    }
+
+    #[test]
     fn test_negating_group_elems() {
         let b = G1::random();
         let neg_b = -b;
@@ -610,7 +629,7 @@ mod test {
         let mut start = Instant::now();
         for i in 0..n {
             // The compiler might not execute the statement below
-            gv[i] * fv[i];
+            let _ = gv[i] * fv[i];
         }
         println!("Time for {} scalar multiplications: {:?}", n, start.elapsed());
 

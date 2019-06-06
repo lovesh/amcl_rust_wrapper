@@ -1,4 +1,3 @@
-use crate::types::{BigNum, GroupG1};
 use crate::errors::ValueError;
 use crate::field_elem::FieldElement;
 use std::slice::Iter;

@@ -5,7 +5,6 @@ use super::types::{BigNum, DoubleBigNum, GroupG1, GroupG2};
 pub const MODBYTES: usize = curve_MODBYTES;
 pub const NLEN: usize = curve_NLEN;
 
-// TODO: Extra 1 byte not needed.
 // Byte size of element in group G1, 1 extra byte for compression flag
 pub const GroupG1_SIZE: usize = (2 * MODBYTES + 1) as usize;
 // Byte size of element in group G2

@@ -777,6 +777,17 @@ mod test {
     use amcl::bls381::big::BIG;
 
     #[test]
+    fn test_to_and_from_bytes() {
+        for _ in 0..100 {
+            let x = FieldElement::random();
+            let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
+            bytes.copy_from_slice(x.to_bytes().as_slice());
+            let y = FieldElement::from(&bytes);
+            assert_eq!(x, y)
+        }
+    }
+
+    #[test]
     fn test_field_elem_multiplication() {
         let a: FieldElement = 5u8.into();
         let b: FieldElement = 18u8.into();

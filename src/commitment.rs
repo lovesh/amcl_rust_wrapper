@@ -1,4 +1,4 @@
-use crate::group_elem::{GroupElement, GroupElementVector};
+use crate::group_elem::GroupElementVector;
 use crate::group_elem_g1::{G1, G1Vector};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::errors::ValueError;
