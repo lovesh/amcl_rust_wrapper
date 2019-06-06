@@ -34,6 +34,7 @@ pub mod field_elem;
 pub mod group_elem;
 #[macro_use]
 pub mod group_elem_g1;
+pub mod commitment;
+#[cfg(any(feature = "bls381", feature = "bn254"))]
 #[macro_use]
 pub mod group_elem_g2;
-pub mod commitment;

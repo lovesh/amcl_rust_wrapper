@@ -18,6 +18,7 @@ byteorder = "1.3.1"
 
 [dependencies.amcl]
 git = "https://github.com/miracl/amcl"
-branch = "master"
-features = ["bn254", "bls381", "secp256k1", "ed25519"]
+#branch = "master"
+rev = "6031c23bfa3f7e66379bc30e5252f7f4958d02d8"
+features = ["bls381", "bn254", "secp256k1", "ed25519"]
 default = ["bls381"]
