@@ -106,7 +106,7 @@ impl GroupElement for G1 {
 
 /// Represents an element of the sub-group of the elliptic curve over the prime field
 impl G1 {
-    /// Return underlying ECP
+    /// Return underlying elliptic curve point, ECP
     pub fn to_ecp(&self) -> GroupG1 {
         self.value.clone()
     }
@@ -642,12 +642,12 @@ mod test {
     #[test]
     fn timing_group_elem_addition() {
         let count = 100;
-        let points: Vec<G1> = (0..100).map(|_| G1::random()).collect();
+        let points: Vec<_> = (0..100).map(|_| G1::random()).collect();
         let mut R = G1::random();
         let start = Instant::now();
         for i in 0..count {
             R = R + points[i];
         }
-        println!("Addition time for {} elems = {:?}", count, start.elapsed());
+        println!("Addition time for {} G1 elems = {:?}", count, start.elapsed());
     }
 }

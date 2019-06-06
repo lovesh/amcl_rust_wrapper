@@ -106,7 +106,7 @@ impl GroupElement for G2 {
 
 /// Represents an element of the sub-group of the elliptic curve over the prime extension field
 impl G2 {
-    /// Return underlying ECP2
+    /// Return underlying elliptic curve point, ECP2
     pub fn to_ecp(&self) -> GroupG2 {
         self.value.clone()
     }
@@ -169,5 +169,17 @@ mod test {
         expected_sum = expected_sum.plus(&b);
         expected_sum = expected_sum.plus(&c);
         assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn timing_group_elem_addition() {
+        let count = 100;
+        let points: Vec<_> = (0..100).map(|_| G2::random()).collect();
+        let mut R = G2::random();
+        let start = Instant::now();
+        for i in 0..count {
+            R = R + points[i];
+        }
+        println!("Addition time for {} G2 elems = {:?}", count, start.elapsed());
     }
 }
