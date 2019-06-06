@@ -38,6 +38,7 @@ let a_wnaf = a.to_wnaf(5);
 ```
 
 ```
+// G1 is the elliptic curve sub-group over the prime field
 let x = G1::random();
 let y = G1::random();
 let neg_y = -y;
@@ -52,6 +53,24 @@ let mut sum_1 = G1::identity();
 sum_1 += z;
 sum_1 += z1;
 ```
+
+```
+// G2 is the elliptic curve sub-group over the prime extension field
+let x = G2::random();
+let y = G2::random();
+let neg_y = -y;
+assert_ne!(y, neg_y);
+let neg_neg_y = -neg_y;
+assert_eq!(y, neg_neg_y);
+assert_eq!(y+neg_y, G2::identity());
+
+let z = x + y;
+let z1 = x - y;
+let mut sum_1 = G2::identity();
+sum_1 += z;
+sum_1 += z1;
+```
+
 Mutating versions of the above operations like addition/subtraction/negation/inversion are present but have to be called as methods like `b.negate()`
 
 2. Scalar multiplication

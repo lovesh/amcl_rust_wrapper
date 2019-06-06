@@ -67,24 +67,37 @@ pub trait GroupElement: Sized {
 }
 
 #[macro_export]
-macro_rules! impl_group_elem_ops {
-    ( $group_element:ident ) => {
-        impl From<GroupG1> for $group_element {
-            fn from(x: GroupG1) -> Self {
+macro_rules! impl_group_elem_conversions {
+    ( $group_element:ident, $group:ident, $group_size:ident ) => {
+        impl From<$group> for $group_element {
+            fn from(x: $group) -> Self {
                 Self {
                     value: x
                 }
             }
         }
 
-        impl From<&GroupG1> for $group_element {
-            fn from(x: &GroupG1) -> Self {
+        impl From<&$group> for $group_element {
+            fn from(x: &$group) -> Self {
                 Self {
-                    value: x.clone()
+                value: x.clone()
                 }
             }
         }
 
+        impl From<&[u8; $group_size]> for $group_element {
+            fn from(x: &[u8; $group_size]) -> Self {
+                Self {
+                    value: $group::frombytes(x)
+                }
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! impl_group_elem_ops {
+    ( $group_element:ident ) => {
         impl PartialEq for $group_element {
             fn eq(&self, other: &$group_element) -> bool {
                 let l = self.clone();
@@ -101,7 +114,7 @@ macro_rules! impl_group_elem_ops {
             }
         }
 
-        impl Add<G1> for &$group_element {
+        impl Add<$group_element> for &$group_element {
             type Output = $group_element;
 
             fn add(self, other: $group_element) ->$group_element {
@@ -155,7 +168,7 @@ macro_rules! impl_group_elem_ops {
         }
 
         impl Mul<&FieldElement> for &$group_element {
-            type Output = G1;
+            type Output = $group_element;
 
             fn mul(self, other: &FieldElement) -> $group_element {
                 self.scalar_mul_const_time(other)
@@ -182,6 +195,43 @@ macro_rules! impl_group_elem_ops {
             }
         }
     }
+}
+
+macro_rules! impl_scalar_mul_ops {
+    ( $group_element:ident ) => {
+
+        impl Mul<$group_element> for FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: $group_element) -> $group_element {
+                other.scalar_mul_const_time(&self)
+            }
+        }
+
+        impl Mul<&$group_element> for FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: &$group_element) -> $group_element {
+                other.scalar_mul_const_time(&self)
+            }
+        }
+
+        impl Mul<$group_element> for &FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: $group_element) -> $group_element {
+                other.scalar_mul_const_time(self)
+            }
+        }
+
+        impl Mul<&$group_element> for &FieldElement {
+            type Output = $group_element;
+
+            fn mul(self, other: &$group_element) -> $group_element {
+                other.scalar_mul_const_time(self)
+            }
+        }
+    };
 }
 
 pub trait GroupElementVector<T>: Sized {

@@ -104,7 +104,7 @@ impl GroupElement for G1 {
     }
 }
 
-/// Represents an element of the group on the elliptic curve
+/// Represents an element of the sub-group of the elliptic curve over the prime field
 impl G1 {
     /// Return underlying ECP
     pub fn to_ecp(&self) -> GroupG1 {
@@ -160,15 +160,11 @@ impl G1 {
     }
 }
 
+impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
+
 impl_group_elem_ops!(G1);
 
-impl From<&[u8; GroupG1_SIZE]> for G1 {
-    fn from(x: &[u8; GroupG1_SIZE]) -> Self {
-        Self {
-            value: GroupG1::frombytes(x)
-        }
-    }
-}
+impl_scalar_mul_ops!(G1);
 
 #[derive(Clone, Debug)]
 pub struct G1Vector {
