@@ -38,3 +38,5 @@ pub mod commitment;
 #[cfg(any(feature = "bls381", feature = "bn254"))]
 #[macro_use]
 pub mod group_elem_g2;
+
+// TODO: Move the timing tests to benchmark

@@ -172,14 +172,21 @@ mod test {
     }
 
     #[test]
-    fn timing_group_elem_addition() {
+    fn timing_group_elem_addition_and_scalar_multiplication() {
         let count = 100;
         let points: Vec<_> = (0..100).map(|_| G2::random()).collect();
         let mut R = G2::random();
-        let start = Instant::now();
+        let mut start = Instant::now();
         for i in 0..count {
             R = R + points[i];
         }
         println!("Addition time for {} G2 elems = {:?}", count, start.elapsed());
+
+        let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
+        start = Instant::now();
+        for i in 0..count {
+            points[i] * fs[i];
+        }
+        println!("Scalar multiplication time for {} G2 elems = {:?}", count, start.elapsed());
     }
 }
