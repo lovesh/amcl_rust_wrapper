@@ -1,7 +1,7 @@
 use crate::constants::GroupG2_SIZE;
 use crate::types::GroupG2;
 use crate::utils::hash_msg;
-use crate::errors::ValueError;
+use crate::errors::{ValueError, SerzDeserzError};
 use std::ops::{Add, AddAssign, Sub, Mul, Neg};
 use crate::field_elem::{FieldElement};
 use crate::group_elem::{GroupElement};
@@ -63,6 +63,13 @@ impl GroupElement for G2 {
         let mut bytes: [u8; GroupG2_SIZE] = [0; GroupG2_SIZE];
         temp.tobytes(&mut bytes);
         bytes.to_vec()
+    }
+
+    fn from_bytes(bytes: &[u8])  -> Result<Self, SerzDeserzError> {
+        if bytes.len() != GroupG2_SIZE {
+            return Err(SerzDeserzError::G2BytesIncorrectSize(bytes.len(), GroupG2_SIZE))
+        }
+        Ok(GroupG2::frombytes(bytes).into())
     }
 
     fn add_assign_(&mut self, b: &Self) {
@@ -130,7 +137,18 @@ mod test {
             let mut bytes: [u8; GroupG2_SIZE] = [0; GroupG2_SIZE];
             bytes.copy_from_slice(x.to_bytes().as_slice());
             let y = G2::from(&bytes);
-            assert_eq!(x, y)
+            assert_eq!(x, y);
+
+            let bytes1 = x.to_bytes();
+            assert_eq!(x, G2::from_bytes(bytes1.as_slice()).unwrap());
+
+            // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
+            let mut bytes2 = bytes1.clone();
+            bytes2.push(0);
+            assert!(G2::from_bytes(bytes2.as_slice()).is_err());
+
+            // Decrease length of byte vector
+            assert!(G2::from_bytes(&bytes1[0..GroupG2_SIZE-1]).is_err());
         }
     }
 

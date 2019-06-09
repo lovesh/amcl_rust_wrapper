@@ -1,7 +1,6 @@
-use crate::errors::ValueError;
+use crate::errors::{ValueError, SerzDeserzError};
 use crate::field_elem::FieldElement;
 use std::slice::Iter;
-
 
 #[macro_export]
 macro_rules! add_group_elems {
@@ -40,6 +39,8 @@ pub trait GroupElement: Sized {
     fn from_msg_hash(msg: &[u8]) -> Self;
 
     fn to_bytes(&self) -> Vec<u8>;
+
+    fn from_bytes(bytes: &[u8])  -> Result<Self, SerzDeserzError>;
 
     /// Add a group element to itself. `self = self + b`
     fn add_assign_(&mut self, b: &Self);

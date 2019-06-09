@@ -6,7 +6,14 @@ pub enum ValueError {
     IncorrectSize(usize),
     NonPowerOf2(usize),
     OutOfRange(usize),
-    NegativeValue(BigNum)
+    NegativeValue(BigNum),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SerzDeserzError {
+    FieldElementBytesIncorrectSize(usize, usize),
+    G1BytesIncorrectSize(usize, usize),
+    G2BytesIncorrectSize(usize, usize)
 }
 
 #[macro_export]
