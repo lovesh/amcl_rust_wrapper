@@ -1,17 +1,16 @@
 use crate::constants::GroupG2_SIZE;
+use crate::errors::SerzDeserzError;
+use crate::field_elem::FieldElement;
+use crate::group_elem::GroupElement;
 use crate::types::GroupG2;
 use crate::utils::hash_msg;
-use crate::errors::SerzDeserzError;
-use std::ops::{Add, AddAssign, Sub, Mul, Neg};
-use crate::field_elem::{FieldElement};
-use crate::group_elem::{GroupElement};
+use std::ops::{Add, AddAssign, Mul, Neg, Sub};
 
 use std::fmt;
 
-
 #[derive(Copy, Clone, Debug)]
 pub struct G2 {
-    value: GroupG2
+    value: GroupG2,
 }
 
 impl fmt::Display for G2 {
@@ -24,16 +23,14 @@ impl fmt::Display for G2 {
 impl GroupElement for G2 {
     fn new() -> Self {
         Self {
-            value: GroupG2::new()
+            value: GroupG2::new(),
         }
     }
 
     fn identity() -> Self {
         let mut v = GroupG2::new();
         v.inf();
-        Self {
-            value: v
-        }
+        Self { value: v }
     }
 
     fn generator() -> Self {
@@ -65,9 +62,12 @@ impl GroupElement for G2 {
         bytes.to_vec()
     }
 
-    fn from_bytes(bytes: &[u8])  -> Result<Self, SerzDeserzError> {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != GroupG2_SIZE {
-            return Err(SerzDeserzError::G2BytesIncorrectSize(bytes.len(), GroupG2_SIZE))
+            return Err(SerzDeserzError::G2BytesIncorrectSize(
+                bytes.len(),
+                GroupG2_SIZE,
+            ));
         }
         Ok(GroupG2::frombytes(bytes).into())
     }
@@ -148,7 +148,7 @@ mod test {
             assert!(G2::from_bytes(bytes2.as_slice()).is_err());
 
             // Decrease length of byte vector
-            assert!(G2::from_bytes(&bytes1[0..GroupG2_SIZE-1]).is_err());
+            assert!(G2::from_bytes(&bytes1[0..GroupG2_SIZE - 1]).is_err());
         }
     }
 
@@ -198,13 +198,21 @@ mod test {
         for i in 0..count {
             R = R + points[i];
         }
-        println!("Addition time for {} G2 elems = {:?}", count, start.elapsed());
+        println!(
+            "Addition time for {} G2 elems = {:?}",
+            count,
+            start.elapsed()
+        );
 
         let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
         start = Instant::now();
         for i in 0..count {
             points[i] * fs[i];
         }
-        println!("Scalar multiplication time for {} G2 elems = {:?}", count, start.elapsed());
+        println!(
+            "Scalar multiplication time for {} G2 elems = {:?}",
+            count,
+            start.elapsed()
+        );
     }
 }

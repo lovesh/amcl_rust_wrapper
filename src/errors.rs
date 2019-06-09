@@ -13,20 +13,18 @@ pub enum ValueError {
 pub enum SerzDeserzError {
     FieldElementBytesIncorrectSize(usize, usize),
     G1BytesIncorrectSize(usize, usize),
-    G2BytesIncorrectSize(usize, usize)
+    G2BytesIncorrectSize(usize, usize),
 }
 
 #[macro_export]
 macro_rules! check_vector_size_for_equality {
-    ( $a:expr, $b:expr ) => {
-        {
-            if $a.len() != $b.len() {
-                Err(ValueError::UnequalSizeVectors($a.len(), $b.len()))
-            } else {
-                Ok(())
-            }
+    ( $a:expr, $b:expr ) => {{
+        if $a.len() != $b.len() {
+            Err(ValueError::UnequalSizeVectors($a.len(), $b.len()))
+        } else {
+            Ok(())
         }
-    };
+    }};
 }
 
 #[cfg(test)]

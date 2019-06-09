@@ -1,15 +1,14 @@
-use rand::RngCore;
 use rand::rngs::EntropyRng;
+use rand::RngCore;
 
-use crate::constants::{MODBYTES, CurveOrder, NLEN, BarrettRedc_k, BarrettRedc_u, BarrettRedc_v};
-use crate::types::{BigNum, DoubleBigNum};
-use crate::utils::{get_seeded_RNG, hash_msg, barrett_reduction};
+use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
 use crate::errors::ValueError;
+use crate::types::{BigNum, DoubleBigNum};
+use crate::utils::{barrett_reduction, get_seeded_RNG, hash_msg};
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, Neg};
 use std::fmt;
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
-
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -26,7 +25,7 @@ macro_rules! add_field_elems {
 
 #[derive(Copy, Clone, Debug)]
 pub struct FieldElement {
-    value: BigNum
+    value: BigNum,
 }
 
 impl fmt::Display for FieldElement {
@@ -35,25 +34,24 @@ impl fmt::Display for FieldElement {
     }
 }
 
-
 /// Represents an element of the prime field of the curve. All operations are done modulo the curve order
 impl FieldElement {
     /// Creates a new field element with value 0
     pub fn new() -> Self {
         Self {
-            value: BigNum::new()
+            value: BigNum::new(),
         }
     }
 
     pub fn zero() -> Self {
         Self {
-            value: BigNum::new()
+            value: BigNum::new(),
         }
     }
 
     pub fn one() -> Self {
         Self {
-            value: BigNum::new_int(1)
+            value: BigNum::new_int(1),
         }
     }
 
@@ -100,7 +98,6 @@ impl FieldElement {
         // TODO: Ensure result is not 0
         let h = &hash_msg(msg);
         h.into()
-
     }
 
     /// Add a field element to itself. `self = self + b`
@@ -204,8 +201,8 @@ impl FieldElement {
             return vec![];
         }
 
-        let mut b_vec: Vec<Vec<u8>> = vec![vec![]; k+1];
-        for i in 0..k+1 {
+        let mut b_vec: Vec<Vec<u8>> = vec![vec![]; k + 1];
+        for i in 0..k + 1 {
             let mut c = s.w[i];
             let mut c_vec: Vec<u8> = vec![];
             while c != 0 {
@@ -224,7 +221,7 @@ impl FieldElement {
         let mut r = get_seeded_RNG(entropy_size, rng);
         let mut n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
         while n.iszilch() {
-            n =  BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
+            n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
         }
         n
     }
@@ -234,16 +231,16 @@ impl FieldElement {
     /// at step 2.1, if k_i >= 2^(w-1), k_i = k_i - 2^w
     pub fn to_wnaf(&self, w: usize) -> Vec<i8> {
         // required by the NAF definition
-        debug_assert!( w >= 2 );
+        debug_assert!(w >= 2);
         // required so that the NAF digits fit in i8
-        debug_assert!( w <= 8 );
+        debug_assert!(w <= 8);
 
         // Working on the the underlying BIG to save the cost of to and from conversion with FieldElement
         let mut k = self.to_bignum();
         let mut naf: Vec<i8> = vec![];
 
-        let two_w_1 = 1 << (w - 1);    // 2^(w-1)
-        let two_w = 1 << w;            // 2^w
+        let two_w_1 = 1 << (w - 1); // 2^(w-1)
+        let two_w = 1 << w; // 2^w
 
         // While k is not zero
         while !k.iszilch() {
@@ -261,7 +258,9 @@ impl FieldElement {
 
                 k.w[0] = k.w[0] - u;
                 u as i8
-            } else { 0i8 };
+            } else {
+                0i8
+            };
             naf.push(t);
             k.fshr(1usize);
         }
@@ -272,7 +271,7 @@ impl FieldElement {
     /// Convert to base that is power of 2. Does not handle negative nos or `base` higher than 7
     pub fn to_power_of_2_base(&self, n: usize) -> Vec<u8> {
         debug_assert!(n <= 7);
-        
+
         if self.is_zero() {
             return vec![0u8];
         }
@@ -295,7 +294,7 @@ impl FieldElement {
     /// eg `batch_invert([a, b, c, d])` returns ([1/a, 1/b, 1/c, 1/d], 1/a * 1/b * 1/c * 1/d)
     /// Algorithm taken from Guide to Elliptic Curve Cryptography book, "Algorithm 2.26 Simultaneous inversion"
     pub fn batch_invert(elems: &[Self]) -> (Vec<Self>, Self) {
-        debug_assert!( elems.len() > 0 );
+        debug_assert!(elems.len() > 0);
 
         let k = elems.len();
 
@@ -304,16 +303,16 @@ impl FieldElement {
         // Construct c as [elems[0], elems[0]*elems[1], elems[0]*elems[1]*elems[2], .... elems[0]*elems[1]*elems[2]*...elems[k-1]]
         let mut c: Vec<Self> = vec![elems[0].clone()];
         for i in 1..k {
-            c.push(c[i-1] * elems[i])
+            c.push(c[i - 1] * elems[i])
         }
 
         // u = 1 / elems[0]*elems[1]*elems[2]*...elems[k-1]
-        let all_inv = c[k-1].inverse();
+        let all_inv = c[k - 1].inverse();
         let mut u = all_inv;
         let mut inverses = vec![FieldElement::one(); k];
 
         for i in (1..k).rev() {
-            inverses[i] = u * c[i-1];
+            inverses[i] = u * c[i - 1];
             u = u * elems[i];
         }
 
@@ -337,7 +336,7 @@ impl FieldElement {
 impl From<u8> for FieldElement {
     fn from(x: u8) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: BigNum::new_int(x as isize),
         }
     }
 }
@@ -345,7 +344,7 @@ impl From<u8> for FieldElement {
 impl From<u32> for FieldElement {
     fn from(x: u32) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: BigNum::new_int(x as isize),
         }
     }
 }
@@ -353,7 +352,7 @@ impl From<u32> for FieldElement {
 impl From<u64> for FieldElement {
     fn from(x: u64) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: BigNum::new_int(x as isize),
         }
     }
 }
@@ -361,16 +360,14 @@ impl From<u64> for FieldElement {
 impl From<i32> for FieldElement {
     fn from(x: i32) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: BigNum::new_int(x as isize),
         }
     }
 }
 
 impl From<BigNum> for FieldElement {
     fn from(x: BigNum) -> Self {
-        Self {
-            value: x
-        }
+        Self { value: x }
     }
 }
 
@@ -378,9 +375,7 @@ impl From<&[u8; MODBYTES]> for FieldElement {
     fn from(x: &[u8; MODBYTES]) -> Self {
         let mut n = BigNum::frombytes(x);
         n.rmod(&CurveOrder);
-        Self {
-            value: n
-        }
+        Self { value: n }
     }
 }
 
@@ -401,7 +396,7 @@ impl Ord for FieldElement {
         match BigNum::comp(&self.value, &other.value) {
             0 => Ordering::Equal,
             -1 => Ordering::Less,
-            _ => Ordering::Greater
+            _ => Ordering::Greater,
         }
     }
 }
@@ -532,14 +527,14 @@ impl Neg for &FieldElement {
 
 #[derive(Clone, Debug)]
 pub struct FieldElementVector {
-    elems: Vec<FieldElement>
+    elems: Vec<FieldElement>,
 }
 
 impl FieldElementVector {
     /// Creates a new field element vector with each element being 0
     pub fn new(size: usize) -> Self {
         Self {
-            elems: (0..size).map(|_| FieldElement::new()).collect()
+            elems: (0..size).map(|_| FieldElement::new()).collect(),
         }
     }
 
@@ -565,13 +560,16 @@ impl FieldElementVector {
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            elems: Vec::<FieldElement>::with_capacity(capacity)
+            elems: Vec::<FieldElement>::with_capacity(capacity),
         }
     }
 
     /// Get a vector of random field elements
     pub fn random(size: usize) -> Self {
-        (0..size).map( | _ | FieldElement::random()).collect::<Vec<FieldElement>>().into()
+        (0..size)
+            .map(|_| FieldElement::random())
+            .collect::<Vec<FieldElement>>()
+            .into()
     }
 
     pub fn as_slice(&self) -> &[FieldElement] {
@@ -607,7 +605,7 @@ impl FieldElementVector {
     }
 
     /// Add 2 vectors of field elements
-    pub fn plus(&self, b: &FieldElementVector) ->  Result<FieldElementVector, ValueError> {
+    pub fn plus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -617,7 +615,7 @@ impl FieldElementVector {
     }
 
     /// Subtract 2 vectors of field elements
-    pub fn minus(&self, b: &FieldElementVector) ->  Result<FieldElementVector, ValueError> {
+    pub fn minus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -642,7 +640,6 @@ impl FieldElementVector {
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
             accum += self[i] * b[i];
-
         }
         Ok(accum)
     }
@@ -650,7 +647,10 @@ impl FieldElementVector {
     /// Calculates Hadamard product of 2 field element vectors.
     /// Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
     /// Here `o` denotes multiply operation
-    pub fn hadamard_product(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
+    pub fn hadamard_product(
+        &self,
+        b: &FieldElementVector,
+    ) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut hadamard_product = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -671,17 +671,13 @@ impl FieldElementVector {
 
 impl From<Vec<FieldElement>> for FieldElementVector {
     fn from(x: Vec<FieldElement>) -> Self {
-        Self {
-            elems: x
-        }
+        Self { elems: x }
     }
 }
 
 impl From<&[FieldElement]> for FieldElementVector {
     fn from(x: &[FieldElement]) -> Self {
-        Self {
-            elems: x.to_vec()
-        }
+        Self { elems: x.to_vec() }
     }
 }
 
@@ -694,7 +690,6 @@ impl Index<usize> for FieldElementVector {
 }
 
 impl IndexMut<usize> for FieldElementVector {
-
     fn index_mut(&mut self, idx: usize) -> &mut FieldElement {
         &mut self.elems[idx]
     }
@@ -703,11 +698,11 @@ impl IndexMut<usize> for FieldElementVector {
 impl PartialEq for FieldElementVector {
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
-            return false
+            return false;
         }
         for i in 0..self.len() {
             if self[i] != other[i] {
-                return false
+                return false;
             }
         }
         true
@@ -725,8 +720,10 @@ impl IntoIterator for FieldElementVector {
 
 // TODO: Implement add/sub/mul ops but need some way to handle error when vectors are of different length
 
-
-pub fn multiply_row_vector_with_matrix(vector: &FieldElementVector, matrix: &Vec<FieldElementVector>) -> Result<FieldElementVector, ValueError> {
+pub fn multiply_row_vector_with_matrix(
+    vector: &FieldElementVector,
+    matrix: &Vec<FieldElementVector>,
+) -> Result<FieldElementVector, ValueError> {
     check_vector_size_for_equality!(vector, matrix)?;
     let out_len = matrix[0].len();
     let mut out = FieldElementVector::new(out_len);
@@ -741,8 +738,8 @@ pub fn multiply_row_vector_with_matrix(vector: &FieldElementVector, matrix: &Vec
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::time::{Duration, Instant};
     use amcl::bls381::big::BIG;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -766,17 +763,47 @@ mod test {
 
     #[test]
     fn test_field_elements_inner_product() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
-        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
+        let a: FieldElementVector = vec![
+            FieldElement::from(5),
+            FieldElement::one(),
+            FieldElement::from(100),
+            FieldElement::zero(),
+        ]
+        .into();
+        let b: FieldElementVector = vec![
+            FieldElement::from(18),
+            FieldElement::one(),
+            FieldElement::from(200),
+            FieldElement::zero(),
+        ]
+        .into();
         let c = FieldElement::from((90 + 1 + 200 * 100) as u32);
         assert_eq!(a.inner_product(&b).unwrap(), c);
     }
 
     #[test]
     fn test_field_elements_hadamard_product() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
-        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
-        let h: FieldElementVector = vec![FieldElement::from(90), FieldElement::one(), FieldElement::from(200 * 100), FieldElement::zero()].into();
+        let a: FieldElementVector = vec![
+            FieldElement::from(5),
+            FieldElement::one(),
+            FieldElement::from(100),
+            FieldElement::zero(),
+        ]
+        .into();
+        let b: FieldElementVector = vec![
+            FieldElement::from(18),
+            FieldElement::one(),
+            FieldElement::from(200),
+            FieldElement::zero(),
+        ]
+        .into();
+        let h: FieldElementVector = vec![
+            FieldElement::from(90),
+            FieldElement::one(),
+            FieldElement::from(200 * 100),
+            FieldElement::zero(),
+        ]
+        .into();
         let c = FieldElement::from((90 + 1 + 200 * 100) as u32);
         assert_eq!(a.hadamard_product(&b).unwrap(), h);
         assert_eq!(h.sum(), c);
@@ -784,7 +811,13 @@ mod test {
 
     #[test]
     fn test_scale_field_element_vector() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::from(1), FieldElement::from(100), FieldElement::from(0)].into();
+        let a: FieldElementVector = vec![
+            FieldElement::from(5),
+            FieldElement::from(1),
+            FieldElement::from(100),
+            FieldElement::from(0),
+        ]
+        .into();
         let n = FieldElement::from(3);
         let na = a.scaled_by(&n);
         assert_eq!(na[0], FieldElement::from(5 * 3));
@@ -795,8 +828,20 @@ mod test {
 
     #[test]
     fn test_add_field_element_vectors() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
-        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
+        let a: FieldElementVector = vec![
+            FieldElement::from(5),
+            FieldElement::one(),
+            FieldElement::from(100),
+            FieldElement::zero(),
+        ]
+        .into();
+        let b: FieldElementVector = vec![
+            FieldElement::from(18),
+            FieldElement::one(),
+            FieldElement::from(200),
+            FieldElement::zero(),
+        ]
+        .into();
         let c = a.plus(&b).unwrap();
         assert_eq!(c[0], FieldElement::from(5 + 18));
         assert_eq!(c[1], FieldElement::from(1 + 1));
@@ -831,7 +876,10 @@ mod test {
         c[0] = 2;
         c[1] = 100;
         let m: FieldElement = BigNum::new_ints(&c).into();
-        assert_eq!(m.to_bitvectors(), vec![vec![0, 1], vec![0, 0, 1, 0, 0, 1, 1]]);
+        assert_eq!(
+            m.to_bitvectors(),
+            vec![vec![0, 1], vec![0, 0, 1, 0, 0, 1, 1]]
+        );
     }
 
     #[test]
@@ -841,7 +889,7 @@ mod test {
         assert_ne!(b, neg_b);
         let neg_neg_b = -neg_b;
         assert_eq!(b, neg_neg_b);
-        assert_eq!(b+neg_b, FieldElement::zero());
+        assert_eq!(b + neg_b, FieldElement::zero());
     }
 
     #[test]
@@ -850,7 +898,7 @@ mod test {
         let b = FieldElement::random();
         let c = FieldElement::random();
 
-        let sum =  a + b + c;
+        let sum = a + b + c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
@@ -865,7 +913,7 @@ mod test {
         let b = FieldElement::random();
         let c = FieldElement::random();
 
-        let sum =  a - b - c;
+        let sum = a - b - c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
@@ -904,9 +952,15 @@ mod test {
             (8, vec![0, 2]),
             (63, vec![3, 3, 3]),
             (6719, vec![3, 3, 3, 0, 2, 2, 1]),
-            (8911009812u64, vec![0, 1, 1, 0, 0, 2, 3, 0, 3, 0, 2, 0, 3, 0, 1, 0, 2]),
+            (
+                8911009812u64,
+                vec![0, 1, 1, 0, 0, 2, 3, 0, 3, 0, 2, 0, 3, 0, 1, 0, 2],
+            ),
         ] {
-            assert_eq!(FieldElement::from(n as u64).to_power_of_2_base(2), expected_4);
+            assert_eq!(
+                FieldElement::from(n as u64).to_power_of_2_base(2),
+                expected_4
+            );
         }
 
         for (n, expected_8) in vec![
@@ -915,7 +969,10 @@ mod test {
             (6719, vec![7, 7, 0, 5, 1]),
             (8911009812u64, vec![4, 2, 0, 4, 3, 6, 0, 1, 3, 2, 0, 1]),
         ] {
-            assert_eq!(FieldElement::from(n as u64).to_power_of_2_base(3), expected_8);
+            assert_eq!(
+                FieldElement::from(n as u64).to_power_of_2_base(3),
+                expected_8
+            );
         }
     }
 
@@ -930,7 +987,11 @@ mod test {
         for e in &elems {
             res_mul = res_mul * e;
         }
-        println!("Multiplication time for {} elems = {:?}", count, start.elapsed());
+        println!(
+            "Multiplication time for {} elems = {:?}",
+            count,
+            start.elapsed()
+        );
 
         start = Instant::now();
         let mut inverses = vec![];
@@ -941,7 +1002,11 @@ mod test {
 
         start = Instant::now();
         let (inverses_1, all_inv) = FieldElement::batch_invert(&elems);
-        println!("Batch inverse time for {} elems = {:?}", count, start.elapsed());
+        println!(
+            "Batch inverse time for {} elems = {:?}",
+            count,
+            start.elapsed()
+        );
 
         let mut expected_inv_product = FieldElement::one();
         for i in 0..count {
@@ -967,8 +1032,12 @@ mod test {
     #[test]
     fn timing_field_elem_multiplication() {
         let count = 1000;
-        let l: Vec<BigNum> = (0..count).map(|_| FieldElement::random().to_bignum()).collect();
-        let r: Vec<BigNum> = (0..count).map(|_| FieldElement::random().to_bignum()).collect();
+        let l: Vec<BigNum> = (0..count)
+            .map(|_| FieldElement::random().to_bignum())
+            .collect();
+        let r: Vec<BigNum> = (0..count)
+            .map(|_| FieldElement::random().to_bignum())
+            .collect();
         let mut o1 = vec![];
         let mut o2 = vec![];
 

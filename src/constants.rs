@@ -1,6 +1,6 @@
-use super::ECCurve::rom;
-use super::ECCurve::big::{NLEN as curve_NLEN, MODBYTES as curve_MODBYTES};
 use super::types::{BigNum, DoubleBigNum, GroupG1, GroupG2};
+use super::ECCurve::big::{MODBYTES as curve_MODBYTES, NLEN as curve_NLEN};
+use super::ECCurve::rom;
 
 pub const MODBYTES: usize = curve_MODBYTES;
 pub const NLEN: usize = curve_NLEN;

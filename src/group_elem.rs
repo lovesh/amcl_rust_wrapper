@@ -1,7 +1,7 @@
-use rand::RngCore;
 use rand::rngs::EntropyRng;
+use rand::RngCore;
 
-use crate::errors::{ValueError, SerzDeserzError};
+use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
 use std::slice::Iter;
 
@@ -50,7 +50,7 @@ pub trait GroupElement: Sized {
 
     fn to_bytes(&self) -> Vec<u8>;
 
-    fn from_bytes(bytes: &[u8])  -> Result<Self, SerzDeserzError>;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError>;
 
     /// Add a group element to itself. `self = self + b`
     fn add_assign_(&mut self, b: &Self);
@@ -82,28 +82,24 @@ macro_rules! impl_group_elem_conversions {
     ( $group_element:ident, $group:ident, $group_size:ident ) => {
         impl From<$group> for $group_element {
             fn from(x: $group) -> Self {
-                Self {
-                    value: x
-                }
+                Self { value: x }
             }
         }
 
         impl From<&$group> for $group_element {
             fn from(x: &$group) -> Self {
-                Self {
-                value: x.clone()
-                }
+                Self { value: x.clone() }
             }
         }
 
         impl From<&[u8; $group_size]> for $group_element {
             fn from(x: &[u8; $group_size]) -> Self {
                 Self {
-                    value: $group::frombytes(x)
+                    value: $group::frombytes(x),
                 }
             }
         }
-    }
+    };
 }
 
 #[macro_export]
@@ -128,7 +124,7 @@ macro_rules! impl_group_elem_ops {
         impl Add<$group_element> for &$group_element {
             type Output = $group_element;
 
-            fn add(self, other: $group_element) ->$group_element {
+            fn add(self, other: $group_element) -> $group_element {
                 self.plus(&other)
             }
         }
@@ -205,12 +201,11 @@ macro_rules! impl_group_elem_ops {
                 t.into()
             }
         }
-    }
+    };
 }
 
 macro_rules! impl_scalar_mul_ops {
     ( $group_element:ident ) => {
-
         impl Mul<$group_element> for FieldElement {
             type Output = $group_element;
 
@@ -268,10 +263,10 @@ pub trait GroupElementVector<T>: Sized {
     fn scaled_by(&self, n: &FieldElement) -> Self;
 
     /// Add 2 vectors
-    fn plus(&self, b: &Self) ->  Result<Self, ValueError>;
+    fn plus(&self, b: &Self) -> Result<Self, ValueError>;
 
     /// Subtract 2 vectors
-    fn minus(&self, b: &Self) ->  Result<Self, ValueError>;
+    fn minus(&self, b: &Self) -> Result<Self, ValueError>;
 
     fn iter(&self) -> Iter<T>;
 }
@@ -281,17 +276,13 @@ macro_rules! impl_group_elem_vec_ops {
     ( $group_element:ident, $group_element_vec:ident ) => {
         impl From<Vec<$group_element>> for $group_element_vec {
             fn from(x: Vec<$group_element>) -> Self {
-                Self {
-                    elems: x
-                }
+                Self { elems: x }
             }
         }
 
         impl From<&[$group_element]> for $group_element_vec {
             fn from(x: &[$group_element]) -> Self {
-                Self {
-                    elems: x.to_vec()
-                }
+                Self { elems: x.to_vec() }
             }
         }
 
@@ -304,7 +295,6 @@ macro_rules! impl_group_elem_vec_ops {
         }
 
         impl IndexMut<usize> for $group_element_vec {
-
             fn index_mut(&mut self, idx: usize) -> &mut $group_element {
                 &mut self.elems[idx]
             }
@@ -313,11 +303,11 @@ macro_rules! impl_group_elem_vec_ops {
         impl PartialEq for $group_element_vec {
             fn eq(&self, other: &Self) -> bool {
                 if self.len() != other.len() {
-                    return false
+                    return false;
                 }
                 for i in 0..self.len() {
                     if self[i] != other[i] {
-                        return false
+                        return false;
                     }
                 }
                 true
@@ -332,5 +322,5 @@ macro_rules! impl_group_elem_vec_ops {
                 self.elems.into_iter()
             }
         }
-    }
+    };
 }

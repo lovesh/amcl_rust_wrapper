@@ -1,17 +1,17 @@
 use crate::constants::GroupG1_SIZE;
-use crate::types::GroupG1;
-use crate::utils::hash_msg;
-use crate::errors::{ValueError, SerzDeserzError};
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul, Neg};
+use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
+use crate::types::GroupG1;
+use crate::utils::hash_msg;
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
 
 use std::fmt;
 use std::slice::Iter;
 
 #[derive(Copy, Clone, Debug)]
 pub struct G1 {
-    value: GroupG1
+    value: GroupG1,
 }
 
 impl fmt::Display for G1 {
@@ -24,16 +24,14 @@ impl fmt::Display for G1 {
 impl GroupElement for G1 {
     fn new() -> Self {
         Self {
-            value: GroupG1::new()
+            value: GroupG1::new(),
         }
     }
 
     fn identity() -> Self {
         let mut v = GroupG1::new();
         v.inf();
-        Self {
-            value: v
-        }
+        Self { value: v }
     }
 
     fn generator() -> Self {
@@ -65,9 +63,12 @@ impl GroupElement for G1 {
         bytes.to_vec()
     }
 
-    fn from_bytes(bytes: &[u8])  -> Result<Self, SerzDeserzError> {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != GroupG1_SIZE {
-            return Err(SerzDeserzError::G2BytesIncorrectSize(bytes.len(), GroupG1_SIZE))
+            return Err(SerzDeserzError::G2BytesIncorrectSize(
+                bytes.len(),
+                GroupG1_SIZE,
+            ));
         }
         Ok(GroupG1::frombytes(bytes).into())
     }
@@ -122,7 +123,9 @@ impl G1 {
     /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
     /// returns self*a + h*b
     pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
-        self.value.mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum()).into()
+        self.value
+            .mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum())
+            .into()
     }
 
     /// Multiply point on the curve (element of group G1) with a scalar. Variable time operation
@@ -138,7 +141,7 @@ impl G1 {
     pub fn get_multiples(&self, n: usize) -> Vec<G1> {
         let mut res = vec![self.clone()];
         for i in 2..=n {
-            res.push(res[i-2] + self);
+            res.push(res[i - 2] + self);
         }
         res
     }
@@ -175,19 +178,19 @@ impl_scalar_mul_ops!(G1);
 
 #[derive(Clone, Debug)]
 pub struct G1Vector {
-    elems: Vec<G1>
+    elems: Vec<G1>,
 }
 
 impl GroupElementVector<G1> for G1Vector {
     fn new(size: usize) -> Self {
         Self {
-            elems: (0..size).map(|_| G1::new()).collect()
+            elems: (0..size).map(|_| G1::new()).collect(),
         }
     }
 
     fn with_capacity(capacity: usize) -> Self {
         Self {
-            elems: Vec::<G1>::with_capacity(capacity)
+            elems: Vec::<G1>::with_capacity(capacity),
         }
     }
 
@@ -229,7 +232,7 @@ impl GroupElementVector<G1> for G1Vector {
         scaled.into()
     }
 
-    fn plus(&self, b: &Self) ->  Result<Self, ValueError> {
+    fn plus(&self, b: &Self) -> Result<Self, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = G1Vector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -238,7 +241,7 @@ impl GroupElementVector<G1> for G1Vector {
         Ok(sum_vector)
     }
 
-    fn minus(&self, b: &Self) ->  Result<Self, ValueError> {
+    fn minus(&self, b: &Self) -> Result<Self, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = G1Vector::with_capacity(self.len());
         for i in 0..self.len() {
@@ -281,7 +284,10 @@ impl G1Vector {
     }
 
     /// Constant time multi-scalar multiplication. Naive approach computing `n` scalar multiplications and 1 addition for `n` field elements
-    pub fn multi_scalar_mul_const_time_naive(&self, field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    pub fn multi_scalar_mul_const_time_naive(
+        &self,
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         check_vector_size_for_equality!(field_elems, self)?;
         let mut accum = G1::new();
         for i in 0..self.len() {
@@ -291,19 +297,29 @@ impl G1Vector {
     }
 
     /// Constant time multi-scalar multiplication
-    pub fn multi_scalar_mul_const_time(&self, field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    pub fn multi_scalar_mul_const_time(
+        &self,
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         Self::_multi_scalar_mul_const_time(&self, field_elems)
     }
 
     /// Variable time multi-scalar multiplication
-    pub fn multi_scalar_mul_var_time(&self, field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    pub fn multi_scalar_mul_var_time(
+        &self,
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         Self::_multi_scalar_mul_var_time(&self, field_elems)
     }
 
     /// Strauss multi-scalar multiplication
-    fn _multi_scalar_mul_var_time(group_elems: &G1Vector, field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    fn _multi_scalar_mul_var_time(
+        group_elems: &G1Vector,
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         check_vector_size_for_equality!(field_elems, group_elems)?;
-        let lookup_tables: Vec<_> = group_elems.as_slice()
+        let lookup_tables: Vec<_> = group_elems
+            .as_slice()
             .into_iter()
             .map(|e| NafLookupTable5::from(e))
             .collect();
@@ -312,12 +328,15 @@ impl G1Vector {
     }
 
     /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
-    pub fn multi_scalar_mul_var_time_with_precomputation_done(lookup_tables: &[NafLookupTable5],
-                                                              field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    pub fn multi_scalar_mul_var_time_with_precomputation_done(
+        lookup_tables: &[NafLookupTable5],
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         // Redundant check when called from multi_scalar_mul_var_time
         check_vector_size_for_equality!(field_elems, lookup_tables)?;
 
-        let mut nafs: Vec<_> = field_elems.as_slice()
+        let mut nafs: Vec<_> = field_elems
+            .as_slice()
             .into_iter()
             .map(|e| e.to_wnaf(5))
             .collect();
@@ -346,26 +365,36 @@ impl G1Vector {
     /// Constant time multi-scalar multiplication.
     /// Taken from Guide to Elliptic Curve Cryptography book, "Algorithm 3.48 Simultaneous multiple point multiplication" without precomputing the addition
     /// Still helps with reducing doublings
-    fn _multi_scalar_mul_const_time(group_elems: &G1Vector, field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    fn _multi_scalar_mul_const_time(
+        group_elems: &G1Vector,
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         check_vector_size_for_equality!(field_elems, group_elems)?;
 
         // Choosing window of size 3.
-        let group_elem_multiples: Vec<_> = group_elems.as_slice()
+        let group_elem_multiples: Vec<_> = group_elems
+            .as_slice()
             .into_iter()
-            .map(|e| e.get_multiples(7))       // 2^3 - 1
+            .map(|e| e.get_multiples(7)) // 2^3 - 1
             .collect();
 
-        Self::multi_scalar_mul_const_time_with_precomputation_done(&group_elem_multiples, field_elems)
+        Self::multi_scalar_mul_const_time_with_precomputation_done(
+            &group_elem_multiples,
+            field_elems,
+        )
     }
 
-    pub fn multi_scalar_mul_const_time_with_precomputation_done(group_elem_multiples: &Vec<Vec<G1>>,
-                                                                field_elems: &FieldElementVector) -> Result<G1, ValueError> {
+    pub fn multi_scalar_mul_const_time_with_precomputation_done(
+        group_elem_multiples: &Vec<Vec<G1>>,
+        field_elems: &FieldElementVector,
+    ) -> Result<G1, ValueError> {
         // Redundant check when called from multi_scalar_mul_const_time
         check_vector_size_for_equality!(group_elem_multiples, field_elems)?;
 
         // TODO: The test shows that precomputing multiples does not help much. Experiment with bigger window.
 
-        let mut field_elems_base_repr: Vec<_> = field_elems.as_slice()
+        let mut field_elems_base_repr: Vec<_> = field_elems
+            .as_slice()
             .into_iter()
             .map(|e| e.to_power_of_2_base(3))
             .collect();
@@ -379,10 +408,13 @@ impl G1Vector {
             r.double_mut();
             r.double_mut();
             r.double_mut();
-            for (b, m) in field_elems_base_repr.iter().zip(group_elem_multiples.iter()) {
+            for (b, m) in field_elems_base_repr
+                .iter()
+                .zip(group_elem_multiples.iter())
+            {
                 // TODO: The following can be replaced with a pre-computation.
                 if b[i] != 0 {
-                    r = r + m[(b[i]-1) as usize]
+                    r = r + m[(b[i] - 1) as usize]
                 }
             }
         }
@@ -440,7 +472,7 @@ mod test {
             assert!(G1::from_bytes(bytes2.as_slice()).is_err());
 
             // Decrease length of byte vector
-            assert!(G1::from_bytes(&bytes1[0..GroupG1_SIZE-1]).is_err());
+            assert!(G1::from_bytes(&bytes1[0..GroupG1_SIZE - 1]).is_err());
         }
     }
 
@@ -451,7 +483,7 @@ mod test {
         assert_ne!(b, neg_b);
         let neg_neg_b = -neg_b;
         assert_eq!(b, neg_neg_b);
-        assert_eq!(b+neg_b, G1::identity());
+        assert_eq!(b + neg_b, G1::identity());
     }
 
     #[test]
@@ -483,7 +515,7 @@ mod test {
         let b = G1::random();
         let c = G1::random();
 
-        let sum =  a + b + c;
+        let sum = a + b + c;
 
         let mut expected_sum = G1::new();
         expected_sum = expected_sum.plus(&a);
@@ -498,7 +530,7 @@ mod test {
             let a = G1::random();
             let mults = a.get_multiples(17);
             for i in 1..=17 {
-                assert_eq!(mults[i-1], a * FieldElement::from(i as u8));
+                assert_eq!(mults[i - 1], a * FieldElement::from(i as u8));
             }
         }
     }
@@ -589,13 +621,16 @@ mod test {
 
         assert_eq!(res_1, res);
 
-        let lookup_tables: Vec<_> = gv.as_slice()
+        let lookup_tables: Vec<_> = gv
+            .as_slice()
             .into_iter()
             .map(|e| e.to_wnaf_lookup_table(5))
             .collect();
 
         start = Instant::now();
-        let res_2 = G1Vector::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, &fv).unwrap();
+        let res_2 =
+            G1Vector::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, &fv)
+                .unwrap();
         let var_precomp_time = start.elapsed();
 
         assert_eq!(res_2, res);
@@ -606,22 +641,42 @@ mod test {
 
         assert_eq!(res_3, res);
 
-        let group_elem_multiples: Vec<_> = gv.as_slice()
+        let group_elem_multiples: Vec<_> = gv
+            .as_slice()
             .into_iter()
             .map(|e| e.get_multiples(7))
             .collect();
 
         start = Instant::now();
-        let res_4 = G1Vector::multi_scalar_mul_const_time_with_precomputation_done(&group_elem_multiples, &fv).unwrap();
+        let res_4 = G1Vector::multi_scalar_mul_const_time_with_precomputation_done(
+            &group_elem_multiples,
+            &fv,
+        )
+        .unwrap();
         let const_precomp_time = start.elapsed();
 
         assert_eq!(res_4, res);
 
-        println!("Constant time for {} size multi-scalar multiplications using naive method: {:?}", n, const_time_naive);
-        println!("Constant time for {} size multi-scalar multiplications: {:?}", n, const_time);
-        println!("Constant time with pre-computation for {} size multi-scalar multiplications: {:?}", n, const_precomp_time);
-        println!("Variable time for {} size multi-scalar multiplications: {:?}", n, var_time);
-        println!("Variable time with pre-computation for {} size multi-scalar multiplications: {:?}", n, var_precomp_time);
+        println!(
+            "Constant time for {} size multi-scalar multiplications using naive method: {:?}",
+            n, const_time_naive
+        );
+        println!(
+            "Constant time for {} size multi-scalar multiplications: {:?}",
+            n, const_time
+        );
+        println!(
+            "Constant time with pre-computation for {} size multi-scalar multiplications: {:?}",
+            n, const_precomp_time
+        );
+        println!(
+            "Variable time for {} size multi-scalar multiplications: {:?}",
+            n, var_time
+        );
+        println!(
+            "Variable time with pre-computation for {} size multi-scalar multiplications: {:?}",
+            n, var_precomp_time
+        );
     }
 
     #[test]
@@ -645,7 +700,11 @@ mod test {
             // The compiler might not execute the statement below
             let _ = gv[i] * fv[i];
         }
-        println!("Time for {} scalar multiplications: {:?}", n, start.elapsed());
+        println!(
+            "Time for {} scalar multiplications: {:?}",
+            n,
+            start.elapsed()
+        );
 
         start = Instant::now();
         for i in 0..n {
@@ -654,7 +713,11 @@ mod test {
             // The compiler might not execute the statement below
             G1::wnaf_mul(&table, &naf);
         }
-        println!("Time for {} scalar multiplications using wnaf: {:?}", n, start.elapsed());
+        println!(
+            "Time for {} scalar multiplications using wnaf: {:?}",
+            n,
+            start.elapsed()
+        );
     }
 
     #[test]
@@ -666,13 +729,21 @@ mod test {
         for i in 0..count {
             R = R + points[i];
         }
-        println!("Addition time for {} G1 elems = {:?}", count, start.elapsed());
+        println!(
+            "Addition time for {} G1 elems = {:?}",
+            count,
+            start.elapsed()
+        );
 
         let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
         start = Instant::now();
         for i in 0..count {
             points[i] * fs[i];
         }
-        println!("Scalar multiplication time for {} G1 elems = {:?}", count, start.elapsed());
+        println!(
+            "Scalar multiplication time for {} G1 elems = {:?}",
+            count,
+            start.elapsed()
+        );
     }
 }

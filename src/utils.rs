@@ -1,26 +1,25 @@
 extern crate rand;
 
-use rand::RngCore;
 use rand::rngs::EntropyRng;
+use rand::RngCore;
 
-use amcl::rand::RAND;
-use crate::constants::{MODBYTES, CurveOrder};
+use crate::constants::{CurveOrder, MODBYTES};
 use crate::types::{BigNum, DoubleBigNum, GroupGT};
+use amcl::rand::RAND;
 
-use amcl::sha3::{SHAKE256, SHA3};
 use super::ECCurve::pair::{ate, fexp};
 use crate::group_elem_g1::G1;
 use crate::group_elem_g2::G2;
-
+use amcl::sha3::{SHA3, SHAKE256};
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
     let mut hasher = SHA3::new(SHAKE256);
-    for i in 0..msg.len(){
+    for i in 0..msg.len() {
         hasher.process(msg[i]);
     }
     let mut h: [u8; MODBYTES] = [0; MODBYTES];
-    hasher.shake(&mut h,MODBYTES);
+    hasher.shake(&mut h, MODBYTES);
     h
 }
 
@@ -28,7 +27,7 @@ pub fn get_seeded_RNG(entropy_size: usize, rng: Option<&mut EntropyRng>) -> RAND
     // initialise from at least 128 byte string of raw random entropy
     let mut entropy = vec![0; entropy_size];
     match rng {
-        Some(rng) =>  rng.fill_bytes(&mut entropy.as_mut_slice()),
+        Some(rng) => rng.fill_bytes(&mut entropy.as_mut_slice()),
         None => {
             let mut rng = EntropyRng::new();
             rng.fill_bytes(&mut entropy.as_mut_slice());
@@ -41,7 +40,13 @@ pub fn get_seeded_RNG(entropy_size: usize, rng: Option<&mut EntropyRng>) -> RAND
 }
 
 /// Perform Barrett reduction given the params computed from `barrett_reduction_params`. Algorithm 14.42 from Handbook of Applied Cryptography
-pub fn barrett_reduction(x: &DoubleBigNum, modulus: &BigNum, k: usize, u: &BigNum, v: &BigNum) -> BigNum {
+pub fn barrett_reduction(
+    x: &DoubleBigNum,
+    modulus: &BigNum,
+    k: usize,
+    u: &BigNum,
+    v: &BigNum,
+) -> BigNum {
     // q1 = floor(x / 2^{k-1})
     let mut q1 = x.clone();
     q1.shr(k - 1);
@@ -127,7 +132,6 @@ fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: 
     r
 }
 
-
 /// For a modulus returns
 /// k = number of bits in modulus
 /// u = floor(2^2k / modulus)
@@ -146,7 +150,7 @@ pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
 
     // v = 2^(k+1)
     let mut v = BigNum::new_int(1isize);
-    v.shl(k+1);
+    v.shl(k + 1);
 
     (k, u, v)
 }
@@ -159,38 +163,45 @@ pub fn ate_pairing(point_G1: &G1, point_G2: &G2) -> GroupGT {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::constants;
     use crate::field_elem::FieldElement;
     use crate::group_elem::GroupElement;
     use crate::group_elem_g1::G1;
-    use std::time::{Duration, Instant};
+    use crate::utils::rand::Rng;
     use amcl::bls381::big::BIG;
     use amcl::bls381::dbig::DBIG;
-    use amcl::bls381::fp::FP;
     use amcl::bls381::ecp::ECP;
-    use crate::constants;
-    use crate::utils::rand::Rng;
+    use amcl::bls381::fp::FP;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn timing_fp_big() {
-
         // TODO: Compare adding raw BIGs and FieldElement to check the overhead of the abstraction
         let count = 100;
         let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
-        let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
+        let bigs: Vec<_> = elems.iter().map(|f| f.to_bignum()).collect();
         let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
         let mut res_mul = BIG::new_int(1 as isize);
         let mut start = Instant::now();
         for b in &bigs {
             res_mul = BigNum::modmul(&res_mul, &b, &CurveOrder);
         }
-        println!("Multiplication time for {} BIGs = {:?}", count, start.elapsed());
+        println!(
+            "Multiplication time for {} BIGs = {:?}",
+            count,
+            start.elapsed()
+        );
 
         let mut res_mul = FP::new_int(1 as isize);
         start = Instant::now();
         for f in &fs {
             res_mul.mul(&f);
         }
-        println!("Multiplication time for {} FPs = {:?}", count, start.elapsed());
+        println!(
+            "Multiplication time for {} FPs = {:?}",
+            count,
+            start.elapsed()
+        );
 
         let mut inverses_b: Vec<BigNum> = vec![];
         let mut inverses_f: Vec<FP> = vec![];
@@ -268,7 +279,7 @@ mod test {
         for i in 0..count {
             let mut _1 = g[i].mul(&a[i]);
             _1.add(&h[i].mul(&b[i]));
-            r2.push( _1);
+            r2.push(_1);
         }
         println!("mul+add time for {} = {:?}", count, start.elapsed());
 
@@ -280,7 +291,11 @@ mod test {
     #[test]
     fn timing_barrett_reduction() {
         //let (k, u, v) = barrett_reduction_params(&CurveOrder);
-        let (k, u, v) = (*constants::BarrettRedc_k, *constants::BarrettRedc_u, *constants::BarrettRedc_v);
+        let (k, u, v) = (
+            *constants::BarrettRedc_k,
+            *constants::BarrettRedc_u,
+            *constants::BarrettRedc_v,
+        );
         let mut xs = vec![];
         let mut reduced1 = vec![];
         let mut reduced2 = vec![];
@@ -291,7 +306,6 @@ mod test {
             let s = BigNum::new_int(a as isize);
             let _x = CurveOrder.minus(&s);
             xs.push(BigNum::mul(&_x, &_x));
-
         }
 
         let mut start = Instant::now();
@@ -306,7 +320,6 @@ mod test {
             let mut y = x.clone();
             let z = y.dmod(&CurveOrder);
             reduced2.push(z);
-
         }
         println!("Normal time = {:?}", start.elapsed());
 
@@ -317,10 +330,14 @@ mod test {
 
     #[test]
     fn timing_rmod_with_barrett_reduction() {
-        let (k, u, v) = (*constants::BarrettRedc_k, *constants::BarrettRedc_u, *constants::BarrettRedc_v);
+        let (k, u, v) = (
+            *constants::BarrettRedc_k,
+            *constants::BarrettRedc_u,
+            *constants::BarrettRedc_v,
+        );
         let count = 100;
         let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
-        let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
+        let bigs: Vec<_> = elems.iter().map(|f| f.to_bignum()).collect();
 
         let mut sum = bigs[0].clone();
         let mut start = Instant::now();
