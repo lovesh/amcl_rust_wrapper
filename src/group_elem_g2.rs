@@ -1,13 +1,13 @@
 use crate::constants::GroupG2_SIZE;
 use crate::types::GroupG2;
 use crate::utils::hash_msg;
-use crate::errors::{ValueError, SerzDeserzError};
+use crate::errors::SerzDeserzError;
 use std::ops::{Add, AddAssign, Sub, Mul, Neg};
 use crate::field_elem::{FieldElement};
 use crate::group_elem::{GroupElement};
 
 use std::fmt;
-use std::slice::Iter;
+
 
 #[derive(Copy, Clone, Debug)]
 pub struct G2 {

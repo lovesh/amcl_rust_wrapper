@@ -1,3 +1,6 @@
+use rand::RngCore;
+use rand::rngs::EntropyRng;
+
 use crate::errors::{ValueError, SerzDeserzError};
 use crate::field_elem::FieldElement;
 use std::slice::Iter;
@@ -24,8 +27,15 @@ pub trait GroupElement: Sized {
     /// Return the group's generator
     fn generator() -> Self;
 
+    /// Return a random group element
     fn random() -> Self {
         let n = FieldElement::random();
+        Self::generator().scalar_mul_const_time(&n)
+    }
+
+    /// Return a random group element using the given random number generator
+    fn random_using_rng(rng: &mut EntropyRng) -> Self {
+        let n = FieldElement::random_using_rng(rng);
         Self::generator().scalar_mul_const_time(&n)
     }
 

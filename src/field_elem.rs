@@ -65,7 +65,13 @@ impl FieldElement {
 
     /// Return a random non-zero field element
     pub fn random() -> Self {
-        Self::random_field_element().into()
+        Self::random_field_element(None).into()
+    }
+
+    /// Return a random non-zero field element using the given random number generator
+    pub fn random_using_rng(rng: &mut EntropyRng) -> Self {
+        let opt = Some(rng);
+        Self::random_field_element(opt).into()
     }
 
     pub fn is_zero(&self) -> bool {
@@ -212,12 +218,15 @@ impl FieldElement {
     }
 
     /// Return a random non-zero field element
-    fn random_field_element() -> BigNum {
+    fn random_field_element(rng: Option<&mut EntropyRng>) -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
         let entropy_size = 256;
-        let mut r = get_seeded_RNG(entropy_size);
-        let n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
-        if n.iszilch() { Self::random_field_element() } else { n }
+        let mut r = get_seeded_RNG(entropy_size, rng);
+        let mut n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
+        while n.iszilch() {
+            n =  BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
+        }
+        n
     }
 
     /// Conversion to wNAF, i.e. windowed Non Adjacent form
