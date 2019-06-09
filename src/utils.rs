@@ -5,9 +5,12 @@ use rand::rngs::EntropyRng;
 
 use amcl::rand::RAND;
 use crate::constants::{MODBYTES, CurveOrder};
-use crate::types::{BigNum, DoubleBigNum};
+use crate::types::{BigNum, DoubleBigNum, GroupGT};
 
 use amcl::sha3::{SHAKE256, SHA3};
+use super::ECCurve::pair::{ate, fexp};
+use crate::group_elem_g1::G1;
+use crate::group_elem_g2::G2;
 
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
@@ -78,7 +81,7 @@ pub fn barrett_reduction(x: &DoubleBigNum, modulus: &BigNum, k: usize, u: &BigNu
 }
 
 // Reducing BigNum for comparison with `rmod`
-pub fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: &BigNum) -> BigNum {
+fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: &BigNum) -> BigNum {
     // q1 = floor(x / 2^{k-1})
     let mut q1 = x.clone();
     q1.shr(k - 1);
@@ -143,6 +146,10 @@ pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
     (k, u, v)
 }
 
+pub fn ate_pairing(point_G1: &G1, point_G2: &G2) -> GroupGT {
+    let e = ate(&point_G2.to_ecp(), &point_G1.to_ecp());
+    fexp(&e)
+}
 
 #[cfg(test)]
 mod test {
@@ -327,5 +334,36 @@ mod test {
         println!("Barrett time = {:?}", start.elapsed());
 
         assert_eq!(BigNum::comp(&sum, &sum_b), 0)
+    }
+
+    #[test]
+    fn test_ate_pairing() {
+        let g1 = G1::random();
+        let h1 = G1::random();
+        let g2 = G2::random();
+        let h2 = G2::random();
+
+        // e(g1 + h1, g2) == e(g1, g2)*e(h1, g2)
+        let lhs = ate_pairing(&(g1 + h1), &g2);
+        let mut rhs = ate_pairing(&g1, &g2);
+        let rhs2 = ate_pairing(&h1, &g2);
+        rhs.mul(&rhs2);
+        assert!(lhs == rhs);
+
+        // e(g1, g2+h2) == e(g1, g2)*e(g1, h2)
+        let lhs = ate_pairing(&g1, &(g2 + h2));
+        let mut rhs = ate_pairing(&g1, &g2);
+        let rhs2 = ate_pairing(&g1, &h2);
+        rhs.mul(&rhs2);
+        assert!(lhs == rhs);
+
+        let r = FieldElement::random();
+        // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
+        let p1 = ate_pairing(&g1, &(g2 * r));
+        let p2 = ate_pairing(&(g1 * r), &g2);
+        let mut p = ate_pairing(&g1, &g2);
+        p = p.pow(&r.to_bignum());
+        assert!(p1 == p2);
+        assert!(p1 == p);
     }
 }
