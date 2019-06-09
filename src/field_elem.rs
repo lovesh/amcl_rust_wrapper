@@ -87,7 +87,7 @@ impl FieldElement {
         bytes.to_vec()
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != MODBYTES {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 bytes.len(),
