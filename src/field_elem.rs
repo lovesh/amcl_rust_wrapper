@@ -2,7 +2,7 @@ use rand::rngs::EntropyRng;
 use rand::RngCore;
 
 use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
-use crate::errors::ValueError;
+use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum};
 use crate::utils::{barrett_reduction, get_seeded_RNG, hash_msg};
 use std::cmp::Ordering;
@@ -85,6 +85,18 @@ impl FieldElement {
         let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
         temp.tobytes(&mut bytes);
         bytes.to_vec()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+        if bytes.len() != MODBYTES {
+            return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
+                bytes.len(),
+                MODBYTES,
+            ));
+        }
+        let mut n = BigNum::frombytes(bytes);
+        n.rmod(&CurveOrder);
+        Ok(Self { value: n })
     }
 
     pub fn to_bignum(&self) -> BigNum {

@@ -37,11 +37,6 @@ impl GroupElement for G2 {
         GroupG2::generator().into()
     }
 
-    fn random() -> Self {
-        let n = FieldElement::random();
-        Self::generator().scalar_mul_const_time(&n)
-    }
-
     fn is_identity(&self) -> bool {
         self.value.is_infinity()
     }

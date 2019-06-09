@@ -38,11 +38,6 @@ impl GroupElement for G1 {
         GroupG1::generator().into()
     }
 
-    fn random() -> Self {
-        let n = FieldElement::random();
-        Self::generator().scalar_mul_const_time(&n)
-    }
-
     fn is_identity(&self) -> bool {
         self.value.is_infinity()
     }
@@ -65,7 +60,7 @@ impl GroupElement for G1 {
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != GroupG1_SIZE {
-            return Err(SerzDeserzError::G2BytesIncorrectSize(
+            return Err(SerzDeserzError::G1BytesIncorrectSize(
                 bytes.len(),
                 GroupG1_SIZE,
             ));
