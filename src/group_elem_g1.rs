@@ -134,6 +134,7 @@ impl G1 {
 
     /// Return multiples of itself. eg. Given `n`=5, returns self, 2*self, 3*self, 4*self, 5*self
     pub fn get_multiples(&self, n: usize) -> Vec<G1> {
+        // TODO: Can use `selector` from ECP
         let mut res = vec![self.clone()];
         for i in 2..=n {
             res.push(res[i - 2] + self);

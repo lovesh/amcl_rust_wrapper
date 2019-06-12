@@ -5,7 +5,7 @@ authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
 edition = "2018"
 
 [features]
-default = ["bls381"]
+default = []
 bls381 = []
 bn254 = []
 secp256k1 = []
@@ -21,4 +21,4 @@ git = "https://github.com/miracl/amcl"
 #branch = "master"
 rev = "f39c8b9fa77f706362d8503ff7e077f547b86705"
 features = ["bls381", "bn254", "secp256k1", "ed25519"]
-default = ["bls381"]
+default = []

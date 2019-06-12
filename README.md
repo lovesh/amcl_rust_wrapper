@@ -5,7 +5,35 @@
 - Provides abstraction for creating vectors of field elements or group elements and then scale, add, subtract, take inner product or Hadamard product.   
 - Additionally, implements some extra algorithms like variable time scalar multiplication using wNAF, constant time and variable time multi-scalar multiplication, batch (simultaneous) inversion and Barrett reduction.
 
-# Examples
+## Building
+The wrapper has to be built by enabling any one of the mentioned curve as a feature.   
+To build for BLS-381 curve, use
+
+```
+cargo build --features bls381
+```
+
+Similarly, to build for secp256k1, use
+```
+cargo build --features secp256k1
+```
+
+To run tests for secp256k1, use
+```
+cargo test --features secp256k1
+```
+
+To use it as dependency crate, add the name of the curve as a feature. Something like this
+```
+[dependencies.amcl_wrapper]
+git = "https://github.com/lovesh/amcl_rust_wrapper"
+branch = "master"
+features = ["bls381"]
+```
+
+Note that only one curve can be used at a time so the code only works with one feature.
+ 
+## Examples
 1. Create some random field elements or group elements and do some basic additions/subtraction/multiplication 
 ```
 let a = FieldElement::random();
@@ -172,4 +200,22 @@ let ip = g.inner_product_const_time(&f);
 let ip1 = g.inner_product_var_time(&f);
 
 // If lookup tables are already constructed, `multi_scalar_mul_const_time_with_precomputation_done` and `multi_scalar_mul_var_time_with_precomputation_done` can be used for constant and variable time multi-scalar multiplication
+```
+
+5. Pairing support. Ate pairing is supported with target group `GT`  
+```
+let g1 = G1::random();
+let g2 = G2::random();
+// compute ate_pairing
+let gt = GT::ate_pairing(&g1, &g2);
+
+// multiply target group elements
+let h1 = G1::random();
+let h2 = G2::random();
+let ht = GT::ate_pairing(&h1, &h2);
+let m = GT::mul(&gt, &ht);
+
+// Raise target group element to field element (GT^f)
+let r = FieldElement::random();
+let p = gt.pow(&r);
 ```
