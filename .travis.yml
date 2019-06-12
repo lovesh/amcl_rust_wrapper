@@ -2,5 +2,7 @@ language: rust
 rust:
   - stable
 script:
-  - cargo build --release
-  - cargo test --release
+  - cargo test --release --features bls381
+  - cargo test --release --features bn254
+  - cargo test --release --features secp256k1
+  - cargo test --release --features ed25519
