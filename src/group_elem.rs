@@ -1,5 +1,4 @@
-use rand::rngs::EntropyRng;
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
@@ -34,7 +33,7 @@ pub trait GroupElement: Sized {
     }
 
     /// Return a random group element using the given random number generator
-    fn random_using_rng(rng: &mut EntropyRng) -> Self {
+    fn random_using_rng<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let n = FieldElement::random_using_rng(rng);
         Self::generator().scalar_mul_const_time(&n)
     }

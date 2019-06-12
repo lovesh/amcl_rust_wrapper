@@ -1,10 +1,10 @@
-use rand::rngs::EntropyRng;
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 
 use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum};
-use crate::utils::{barrett_reduction, get_seeded_RNG, hash_msg};
+use amcl::rand::RAND;
+use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
@@ -63,13 +63,12 @@ impl FieldElement {
 
     /// Return a random non-zero field element
     pub fn random() -> Self {
-        Self::random_field_element(None).into()
+        Self::random_field_element().into()
     }
 
     /// Return a random non-zero field element using the given random number generator
-    pub fn random_using_rng(rng: &mut EntropyRng) -> Self {
-        let opt = Some(rng);
-        Self::random_field_element(opt).into()
+    pub fn random_using_rng<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        Self::random_field_element_using_rng(rng).into()
     }
 
     pub fn is_zero(&self) -> bool {
@@ -226,14 +225,25 @@ impl FieldElement {
         return b_vec;
     }
 
-    /// Return a random non-zero field element
-    fn random_field_element(rng: Option<&mut EntropyRng>) -> BigNum {
+    /// Return a random non-zero field element using given random number generator
+    fn random_field_element_using_rng<R: RngCore + CryptoRng>(rng: &mut R) -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
         let entropy_size = 256;
-        let mut r = get_seeded_RNG(entropy_size, rng);
-        let mut n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
+        let mut r = get_seeded_RNG_with_rng(entropy_size, rng);
+        Self::get_big_num_from_RAND(&mut r)
+    }
+
+    fn random_field_element() -> BigNum {
+        // initialise from at least 128 byte string of raw random entropy
+        let entropy_size = 256;
+        let mut r = get_seeded_RNG(entropy_size);
+        Self::get_big_num_from_RAND(&mut r)
+    }
+
+    fn get_big_num_from_RAND(r: &mut RAND) -> BigNum {
+        let mut n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), r);
         while n.iszilch() {
-            n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r);
+            n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), r);
         }
         n
     }
@@ -755,8 +765,9 @@ mod test {
 
     #[test]
     fn test_to_and_from_bytes() {
+        let mut rng = rand::thread_rng();
         for _ in 0..100 {
-            let x = FieldElement::random();
+            let x = FieldElement::random_using_rng(&mut rng);
             let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
             bytes.copy_from_slice(x.to_bytes().as_slice());
             let y = FieldElement::from(&bytes);

@@ -1,7 +1,7 @@
 extern crate rand;
 
 use rand::rngs::EntropyRng;
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 
 use crate::constants::{CurveOrder, MODBYTES};
 use crate::types::{BigNum, DoubleBigNum};
@@ -21,16 +21,21 @@ pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
     h
 }
 
-pub fn get_seeded_RNG(entropy_size: usize, rng: Option<&mut EntropyRng>) -> RAND {
+pub fn get_seeded_RNG_with_rng<R: RngCore + CryptoRng>(entropy_size: usize, rng: &mut R) -> RAND {
     // initialise from at least 128 byte string of raw random entropy
     let mut entropy = vec![0; entropy_size];
-    match rng {
-        Some(rng) => rng.fill_bytes(&mut entropy.as_mut_slice()),
-        None => {
-            let mut rng = EntropyRng::new();
-            rng.fill_bytes(&mut entropy.as_mut_slice());
-        }
-    }
+    rng.fill_bytes(&mut entropy.as_mut_slice());
+    get_RAND(entropy_size, entropy.as_slice())
+}
+
+pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
+    let mut entropy = vec![0; entropy_size];
+    let mut rng = EntropyRng::new();
+    rng.fill_bytes(&mut entropy.as_mut_slice());
+    get_RAND(entropy_size, entropy.as_slice())
+}
+
+fn get_RAND(entropy_size: usize, entropy: &[u8]) -> RAND {
     let mut r = RAND::new();
     r.clean();
     r.seed(entropy_size, &entropy);
