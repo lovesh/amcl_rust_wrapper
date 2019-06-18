@@ -206,7 +206,7 @@ let ip1 = g.inner_product_var_time(&f);
 ```
 let g1 = G1::random();
 let g2 = G2::random();
-// compute ate_pairing
+// compute reduced ate pairing for 2 elements, i.e. e(g1, g2)
 let gt = GT::ate_pairing(&g1, &g2);
 
 // multiply target group elements
@@ -214,6 +214,9 @@ let h1 = G1::random();
 let h2 = G2::random();
 let ht = GT::ate_pairing(&h1, &h2);
 let m = GT::mul(&gt, &ht);
+
+// compute reduced ate pairing for 4 elements, i.e. e(g1, g2) * e (h1, h2)
+let p = GT::ate_2_pairing(&g1, &g2, &h1, &h2);
 
 // Raise target group element to field element (GT^f)
 let r = FieldElement::random();

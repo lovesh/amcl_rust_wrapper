@@ -17,8 +17,10 @@ lazy_static = "1.3.0"
 byteorder = "1.3.1"
 
 [dependencies.amcl]
-git = "https://github.com/miracl/amcl"
+#git = "https://github.com/miracl/amcl"
 #branch = "master"
-rev = "f39c8b9fa77f706362d8503ff7e077f547b86705"
+#rev = "f39c8b9fa77f706362d8503ff7e077f547b86705"
+package = "miracl_amcl"
+version = "3.2.0"
 features = ["bls381", "bn254", "secp256k1", "ed25519"]
 default = []
