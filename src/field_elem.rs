@@ -574,7 +574,7 @@ impl FieldElementVector {
             let mut current = elem.clone();
             for _ in 1..size {
                 v.push(current.clone());
-                current = current.multiply(elem);
+                current = current * elem;
             }
             v.into()
         }
@@ -621,7 +621,7 @@ impl FieldElementVector {
     pub fn scaled_by(&self, n: &FieldElement) -> Self {
         let mut scaled = Vec::<FieldElement>::with_capacity(self.len());
         for i in 0..self.len() {
-            scaled.push(self[i].multiply(n))
+            scaled.push(self[i] * n)
         }
         scaled.into()
     }

@@ -201,6 +201,17 @@ mod test {
             start.elapsed()
         );
 
+        let mut res_mul = FieldElement::one();
+        start = Instant::now();
+        for e in &elems {
+            res_mul.multiply(&e);
+        }
+        println!(
+            "Multiplication time for {} FieldElements = {:?}",
+            count,
+            start.elapsed()
+        );
+
         let mut inverses_b: Vec<BigNum> = vec![];
         let mut inverses_f: Vec<FP> = vec![];
 
