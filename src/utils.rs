@@ -201,7 +201,7 @@ mod test {
             start.elapsed()
         );
 
-        let mut res_mul = FieldElement::one();
+        let res_mul = FieldElement::one();
         start = Instant::now();
         for e in &elems {
             res_mul.multiply(&e);
