@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-extern crate amcl;
+pub extern crate amcl;
 
 #[macro_use]
 extern crate lazy_static;

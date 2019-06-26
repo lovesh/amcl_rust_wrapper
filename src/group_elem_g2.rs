@@ -7,6 +7,7 @@ use crate::utils::hash_msg;
 use std::ops::{Add, AddAssign, Mul, Neg, Sub};
 
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 #[derive(Copy, Clone, Debug)]
 pub struct G2 {
@@ -123,6 +124,7 @@ impl_scalar_mul_ops!(G2);
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::collections::{HashSet, HashMap};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -145,6 +147,15 @@ mod test {
             // Decrease length of byte vector
             assert!(G2::from_bytes(&bytes1[0..GroupG2_SIZE - 1]).is_err());
         }
+    }
+
+    #[test]
+    fn test_hashing() {
+        // If the element can be added to HashSet or HashMap, it must be hashable.
+        let mut set = HashSet::new();
+        let mut map = HashMap::new();
+        set.insert(G2::random());
+        map.insert(G2::random(), G2::random());
     }
 
     #[test]

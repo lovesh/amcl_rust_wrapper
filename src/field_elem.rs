@@ -9,6 +9,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
+use std::hash::{Hash, Hasher};
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -31,6 +32,12 @@ pub struct FieldElement {
 impl fmt::Display for FieldElement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.value.fmt(f)
+    }
+}
+
+impl Hash for FieldElement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.to_bytes())
     }
 }
 
@@ -413,6 +420,8 @@ impl PartialOrd for FieldElement {
     }
 }
 
+impl Eq for FieldElement {}
+
 impl Ord for FieldElement {
     fn cmp(&self, other: &FieldElement) -> Ordering {
         match BigNum::comp(&self.value, &other.value) {
@@ -422,8 +431,6 @@ impl Ord for FieldElement {
         }
     }
 }
-
-impl Eq for FieldElement {}
 
 impl Add for FieldElement {
     type Output = Self;
@@ -762,6 +769,7 @@ mod test {
     use super::*;
     use amcl::bls381::big::BIG;
     use std::time::{Duration, Instant};
+    use std::collections::{HashSet, HashMap};
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -997,6 +1005,15 @@ mod test {
                 expected_8
             );
         }
+    }
+
+    #[test]
+    fn test_hashing() {
+        // If the element can be added to HashSet or HashMap, it must be hashable.
+        let mut set = HashSet::new();
+        let mut map = HashMap::new();
+        set.insert(FieldElement::random());
+        map.insert(FieldElement::random(), FieldElement::random());
     }
 
     #[test]

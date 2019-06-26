@@ -8,6 +8,7 @@ use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
 
 use std::fmt;
 use std::slice::Iter;
+use std::hash::{Hash, Hasher};
 
 #[derive(Copy, Clone, Debug)]
 pub struct G1 {
@@ -448,6 +449,7 @@ impl<'a> From<&'a G1> for NafLookupTable5 {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::collections::{HashSet, HashMap};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -470,6 +472,15 @@ mod test {
             // Decrease length of byte vector
             assert!(G1::from_bytes(&bytes1[0..GroupG1_SIZE - 1]).is_err());
         }
+    }
+
+    #[test]
+    fn test_hashing() {
+        // If the element can be added to HashSet or HashMap, it must be hashable.
+        let mut set = HashSet::new();
+        let mut map = HashMap::new();
+        set.insert(G1::random());
+        map.insert(G1::random(), G1::random());
     }
 
     #[test]

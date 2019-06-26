@@ -17,7 +17,7 @@ macro_rules! add_group_elems {
     };
 }
 
-pub trait GroupElement: Sized {
+pub trait GroupElement: Clone + Sized {
     fn new() -> Self;
 
     /// Return the identity element
@@ -98,6 +98,12 @@ macro_rules! impl_group_elem_conversions {
                 }
             }
         }
+
+        impl Hash for $group_element {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                state.write(&self.to_bytes())
+            }
+        }
     };
 }
 
@@ -111,6 +117,8 @@ macro_rules! impl_group_elem_ops {
                 l.value.equals(&mut r.value)
             }
         }
+
+        impl Eq for $group_element {}
 
         impl Add for $group_element {
             type Output = Self;
