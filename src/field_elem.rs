@@ -297,7 +297,7 @@ impl FieldElement {
         naf
     }
 
-    /// Convert to base that is power of 2. Does not handle negative nos or `base` higher than 7
+    /// Convert to base that is power of 2. Does not handle negative nos or `base` higher than 2^7
     pub fn to_power_of_2_base(&self, n: usize) -> Vec<u8> {
         debug_assert!(n <= 7);
 
@@ -315,6 +315,19 @@ impl FieldElement {
             t.fshr(n);
         }
         base_repr
+    }
+
+    /// Convert to base that is power of 2. Does not handle negative nos or `base` higher than 2^7
+    pub fn from_power_of_2_base(repr: &[u8], n: usize) -> Self {
+        debug_assert!(n <= 7);
+
+        let mut accum = FieldElement::zero();
+        let mut factor = FieldElement::one().to_bignum();
+        for i in 0..repr.len() {
+            accum += FieldElement::from(factor) * FieldElement::from(repr[i]);
+            factor.fshl(n);
+        }
+        accum
     }
 
     /// Takes a bunch of field elements and returns the inverse of all field elements.
@@ -962,17 +975,19 @@ mod test {
     }
 
     #[test]
-    fn test_field_elem_to_base() {
+    fn test_field_elem_to_from_base() {
         for i in 0..4 {
             let x = FieldElement::from(i as u8);
             let b = x.to_power_of_2_base(2);
             assert_eq!(b, vec![i]);
+            assert_eq!(x, FieldElement::from_power_of_2_base(&b, 2));
         }
 
         for i in 0..8 {
             let x = FieldElement::from(i as u8);
             let b = x.to_power_of_2_base(3);
             assert_eq!(b, vec![i]);
+            assert_eq!(x, FieldElement::from_power_of_2_base(&b, 3));
         }
 
         for (n, expected_4) in vec![
@@ -988,10 +1003,13 @@ mod test {
                 vec![0, 1, 1, 0, 0, 2, 3, 0, 3, 0, 2, 0, 3, 0, 1, 0, 2],
             ),
         ] {
+            let x = FieldElement::from(n as u64);
+            let b = x.to_power_of_2_base(2);
             assert_eq!(
-                FieldElement::from(n as u64).to_power_of_2_base(2),
+                b,
                 expected_4
             );
+            assert_eq!(x, FieldElement::from_power_of_2_base(&b, 2));
         }
 
         for (n, expected_8) in vec![
@@ -1000,10 +1018,21 @@ mod test {
             (6719, vec![7, 7, 0, 5, 1]),
             (8911009812u64, vec![4, 2, 0, 4, 3, 6, 0, 1, 3, 2, 0, 1]),
         ] {
+            let x = FieldElement::from(n as u64);
+            let b = x.to_power_of_2_base(3);
             assert_eq!(
-                FieldElement::from(n as u64).to_power_of_2_base(3),
+                b,
                 expected_8
             );
+            assert_eq!(x, FieldElement::from_power_of_2_base(&b, 3));
+        }
+
+        for i in 0..100 {
+            let x = FieldElement::random();
+            for base in 2..8 {
+                let digits = x.to_power_of_2_base(base);
+                assert_eq!(x, FieldElement::from_power_of_2_base(&digits, base));
+            }
         }
     }
 
