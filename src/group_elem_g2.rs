@@ -1,13 +1,14 @@
 use crate::constants::GroupG2_SIZE;
-use crate::errors::SerzDeserzError;
+use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
-use crate::group_elem::GroupElement;
+use crate::group_elem::{GroupElement, GroupElementVector};
 use crate::types::GroupG2;
 use crate::utils::hash_msg;
-use std::ops::{Add, AddAssign, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Mul, Neg, Sub, Index, IndexMut};
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::slice::Iter;
 
 #[derive(Copy, Clone, Debug)]
 pub struct G2 {
@@ -105,6 +106,10 @@ impl GroupElement for G2 {
     fn to_hex(&self) -> String {
         self.to_ecp().tostring()
     }
+
+    fn is_extension() -> bool {
+        return true
+    }
 }
 
 /// Represents an element of the sub-group of the elliptic curve over the prime extension field
@@ -120,6 +125,88 @@ impl_group_elem_conversions!(G2, GroupG2, GroupG2_SIZE);
 impl_group_elem_ops!(G2);
 
 impl_scalar_mul_ops!(G2);
+
+
+#[derive(Clone, Debug)]
+pub struct G2Vector {
+    elems: Vec<G2>,
+}
+
+impl GroupElementVector<G2> for G2Vector {
+    fn new(size: usize) -> Self {
+        Self {
+            elems: (0..size).map(|_| G2::new()).collect(),
+        }
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            elems: Vec::<G2>::with_capacity(capacity),
+        }
+    }
+
+    fn as_slice(&self) -> &[G2] {
+        &self.elems
+    }
+
+    fn len(&self) -> usize {
+        self.elems.len()
+    }
+
+    fn push(&mut self, value: G2) {
+        self.elems.push(value)
+    }
+
+    fn append(&mut self, other: &mut Self) {
+        self.elems.append(&mut other.elems)
+    }
+
+    fn sum(&self) -> G2 {
+        let mut accum = G2::new();
+        for i in 0..self.len() {
+            accum += self[i];
+        }
+        accum
+    }
+
+    fn scale(&mut self, n: &FieldElement) {
+        for i in 0..self.len() {
+            self[i] = self[i] * n;
+        }
+    }
+
+    fn scaled_by(&self, n: &FieldElement) -> Self {
+        let mut scaled = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            scaled.push(self[i] * n)
+        }
+        scaled.into()
+    }
+
+    fn plus(&self, b: &Self) -> Result<Self, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut sum_vector = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            sum_vector.push(self[i] + b.elems[i])
+        }
+        Ok(sum_vector)
+    }
+
+    fn minus(&self, b: &Self) -> Result<Self, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut diff_vector = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            diff_vector.push(self[i] - b[i])
+        }
+        Ok(diff_vector)
+    }
+
+    fn iter(&self) -> Iter<G2> {
+        self.as_slice().iter()
+    }
+}
+
+impl_group_elem_vec_ops!(G2, G2Vector);
 
 #[cfg(test)]
 mod test {

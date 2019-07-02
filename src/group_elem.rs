@@ -74,6 +74,8 @@ pub trait GroupElement: Clone + Sized {
 
     /// Returns hex string
     fn to_hex(&self) -> String;
+
+    fn is_extension() -> bool;
 }
 
 #[macro_export]

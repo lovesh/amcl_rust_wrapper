@@ -106,6 +106,10 @@ impl GroupElement for G1 {
     fn to_hex(&self) -> String {
         self.to_ecp().tostring()
     }
+
+    fn is_extension() -> bool {
+        return false
+    }
 }
 
 /// Represents an element of the sub-group of the elliptic curve over the prime field
@@ -231,7 +235,7 @@ impl GroupElementVector<G1> for G1Vector {
 
     fn plus(&self, b: &Self) -> Result<Self, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let mut sum_vector = G1Vector::with_capacity(self.len());
+        let mut sum_vector = Self::with_capacity(self.len());
         for i in 0..self.len() {
             sum_vector.push(self[i] + b.elems[i])
         }
@@ -240,7 +244,7 @@ impl GroupElementVector<G1> for G1Vector {
 
     fn minus(&self, b: &Self) -> Result<Self, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let mut diff_vector = G1Vector::with_capacity(self.len());
+        let mut diff_vector = Self::with_capacity(self.len());
         for i in 0..self.len() {
             diff_vector.push(self[i] - b[i])
         }
