@@ -176,13 +176,22 @@ impl FieldElement {
 
     /// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % curve_order`
     pub fn inverse(&self) -> Self {
+        // Violating constant time guarantee until bug fixed in amcl
+        if self.is_zero() {
+            return Self::zero()
+        }
         let mut inv = self.value.clone();
         inv.invmodp(&CurveOrder);
         inv.into()
     }
 
     pub fn inverse_mut(&mut self) {
-        self.value.invmodp(&CurveOrder);
+        // Violating constant time guarantee until bug fixed in amcl
+        if self.is_zero() {
+            self.value = BigNum::new();
+        } else {
+            self.value.invmodp(&CurveOrder);
+        }
     }
 
     pub fn shift_right(&self, k: usize) -> Self {
@@ -803,6 +812,20 @@ mod test {
         let c: FieldElement = 90u8.into();
         assert_eq!(a.multiply(&b), c);
         assert_eq!(a * b, c);
+    }
+
+    #[test]
+    fn test_inversion() {
+        assert_eq!(FieldElement::zero().inverse(), FieldElement::zero());
+        assert_eq!(FieldElement::one().inverse(), FieldElement::one());
+        let mut zero = FieldElement::zero();
+        zero.inverse_mut();
+        assert_eq!(zero, FieldElement::zero());
+        for _ in 0..10 {
+            let x = FieldElement::random();
+            let x_inv = x.inverse();
+            assert_eq!(x * x_inv, FieldElement::one())
+        }
     }
 
     #[test]
