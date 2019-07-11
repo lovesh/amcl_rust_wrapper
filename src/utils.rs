@@ -1,7 +1,7 @@
 extern crate rand;
 
 use rand::rngs::EntropyRng;
-use rand::{RngCore, CryptoRng};
+use rand::{CryptoRng, RngCore};
 
 use crate::constants::{CurveOrder, MODBYTES};
 use crate::types::{BigNum, DoubleBigNum};

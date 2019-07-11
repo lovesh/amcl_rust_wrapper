@@ -1,10 +1,10 @@
-use crate::constants::{GroupG2_SIZE, CurveOrder};
+use crate::constants::{CurveOrder, GroupG2_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
 use crate::group_elem::{GroupElement, GroupElementVector};
 use crate::types::GroupG2;
 use crate::utils::hash_msg;
-use std::ops::{Add, AddAssign, Mul, Neg, Sub, Index, IndexMut};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -114,11 +114,11 @@ impl GroupElement for G2 {
     }
 
     fn is_extension() -> bool {
-        return true
+        return true;
     }
 
     fn has_correct_order(&self) -> bool {
-        return self.value.mul(&CurveOrder).is_infinity()
+        return self.value.mul(&CurveOrder).is_infinity();
     }
 }
 
@@ -135,7 +135,6 @@ impl_group_elem_conversions!(G2, GroupG2, GroupG2_SIZE);
 impl_group_elem_ops!(G2);
 
 impl_scalar_mul_ops!(G2);
-
 
 #[derive(Clone, Debug)]
 pub struct G2Vector {
@@ -221,7 +220,7 @@ impl_group_elem_vec_ops!(G2, G2Vector);
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::{HashSet, HashMap};
+    use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -297,7 +296,7 @@ mod test {
         for i in 0..10 {
             let a = G2::random();
             let b = a.negation();
-            assert!((a+b).is_identity())
+            assert!((a + b).is_identity())
         }
     }
 
@@ -309,7 +308,11 @@ mod test {
             let a = G2::random();
             assert!(a.has_correct_order())
         }
-        println!("For {} elements, time to check correct order is {:?}", count, start.elapsed())
+        println!(
+            "For {} elements, time to check correct order is {:?}",
+            count,
+            start.elapsed()
+        )
     }
 
     #[test]

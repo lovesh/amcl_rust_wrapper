@@ -1,4 +1,4 @@
-use rand::{RngCore, CryptoRng};
+use rand::{CryptoRng, RngCore};
 
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;

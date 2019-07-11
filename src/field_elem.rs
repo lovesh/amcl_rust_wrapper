@@ -1,15 +1,15 @@
-use rand::{RngCore, CryptoRng};
+use rand::{CryptoRng, RngCore};
 
 use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum};
-use amcl::rand::RAND;
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
+use amcl::rand::RAND;
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
-use std::hash::{Hash, Hasher};
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -178,7 +178,7 @@ impl FieldElement {
     pub fn inverse(&self) -> Self {
         // Violating constant time guarantee until bug fixed in amcl
         if self.is_zero() {
-            return Self::zero()
+            return Self::zero();
         }
         let mut inv = self.value.clone();
         inv.invmodp(&CurveOrder);
@@ -790,8 +790,8 @@ pub fn multiply_row_vector_with_matrix(
 mod test {
     use super::*;
     use amcl::bls381::big::BIG;
+    use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
-    use std::collections::{HashSet, HashMap};
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -1028,10 +1028,7 @@ mod test {
         ] {
             let x = FieldElement::from(n as u64);
             let b = x.to_power_of_2_base(2);
-            assert_eq!(
-                b,
-                expected_4
-            );
+            assert_eq!(b, expected_4);
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 2));
         }
 
@@ -1043,10 +1040,7 @@ mod test {
         ] {
             let x = FieldElement::from(n as u64);
             let b = x.to_power_of_2_base(3);
-            assert_eq!(
-                b,
-                expected_8
-            );
+            assert_eq!(b, expected_8);
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 3));
         }
 

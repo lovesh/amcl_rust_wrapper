@@ -1,4 +1,4 @@
-use crate::constants::{GroupG1_SIZE, CurveOrder};
+use crate::constants::{CurveOrder, GroupG1_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
@@ -7,8 +7,8 @@ use crate::utils::hash_msg;
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
 
 use std::fmt;
-use std::slice::Iter;
 use std::hash::{Hash, Hasher};
+use std::slice::Iter;
 
 #[derive(Copy, Clone, Debug)]
 pub struct G1 {
@@ -114,11 +114,11 @@ impl GroupElement for G1 {
     }
 
     fn is_extension() -> bool {
-        return false
+        return false;
     }
 
     fn has_correct_order(&self) -> bool {
-        return self.value.mul(&CurveOrder).is_infinity()
+        return self.value.mul(&CurveOrder).is_infinity();
     }
 }
 
@@ -463,7 +463,7 @@ impl<'a> From<&'a G1> for NafLookupTable5 {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::{HashSet, HashMap};
+    use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -550,7 +550,7 @@ mod test {
         for i in 0..10 {
             let a = G1::random();
             let b = a.negation();
-            assert!((a+b).is_identity())
+            assert!((a + b).is_identity())
         }
     }
 
@@ -562,7 +562,11 @@ mod test {
             let a = G1::random();
             assert!(a.has_correct_order())
         }
-        println!("For {} elements, time to check correct order is {:?}", count, start.elapsed())
+        println!(
+            "For {} elements, time to check correct order is {:?}",
+            count,
+            start.elapsed()
+        )
     }
 
     #[test]
