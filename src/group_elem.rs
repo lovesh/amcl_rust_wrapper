@@ -76,6 +76,13 @@ pub trait GroupElement: Clone + Sized {
     fn to_hex(&self) -> String;
 
     fn is_extension() -> bool;
+
+    /// Checks if the element has correct order by checking if self *  group order (curve order) == Identity element (point at infinity).
+    /// Uses constant time scalar multiplication.
+    /// Question: But since we always know the multiplicand (group order) is there a faster way?
+    fn has_correct_order(&self) -> bool;
+
+    // TODO: Implement has_correct_order for variable time as well. Need to implement variable time scalar multiplication for group G2.
 }
 
 #[macro_export]

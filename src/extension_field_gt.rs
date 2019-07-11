@@ -1,6 +1,6 @@
 use crate::types::GroupGT;
 
-use super::ECCurve::pair::{ate, fexp, ate2};
+use super::ECCurve::pair::{ate, fexp, ate2, initmp, another, miller};
 use super::ECCurve::fp12::FP12;
 use super::ECCurve::fp4::FP4;
 use crate::field_elem::FieldElement;
@@ -22,6 +22,12 @@ impl fmt::Display for GT {
 }
 
 impl GT {
+    pub fn new() -> Self {
+        Self {
+            value: GroupGT::new()
+        }
+    }
+
     /// Reduced ate pairing. Returns `e(g1, g2)`
     pub fn ate_pairing(g1: &G1, g2: &G2) -> Self {
         // This check is temporary. Until amcl is fixed.
@@ -39,6 +45,18 @@ impl GT {
             return Self::one()
         }
         let e = ate2(&g2.to_ecp(), &g1.to_ecp(), &h2.to_ecp(), &h1.to_ecp());
+        Self { value: fexp(&e) }
+    }
+
+    /// Reduced ate multi pairing. Takes a vector of tuples of group elements G1 and G2 as Vec<(&G1, &G2)>.
+    /// Returns the product of their pairings.
+    /// More efficient than using ate_pairing or ate_2_pairing and multiplying results
+    pub fn ate_mutli_pairing(elems: Vec<(&G1, &G2)>) -> Self {
+        let mut accum = initmp();
+        for (g1, g2) in elems {
+            another(&mut accum, &g2.to_ecp(), &g1.to_ecp());
+        }
+        let e = miller(&accum);
         Self { value: fexp(&e) }
     }
 
@@ -78,7 +96,9 @@ impl PartialEq for GT {
 #[cfg(test)]
 mod test {
     use super::*;
-
+    use crate::group_elem_g1::G1Vector;
+    use std::time::{Duration, Instant};
+    
     #[test]
     fn test_unity() {
         let one = GT::one();
@@ -135,15 +155,19 @@ mod test {
         let lhs = GT::ate_pairing(&(g1 + h1), &g2);
         let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&h1, &g2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &h1, &g2);
+        let rhs_2 = GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &g2)]);
         assert!(lhs == rhs);
         assert!(rhs_1 == rhs);
+        assert!(rhs_2 == rhs);
 
         // e(g1, g2+h2) == e(g1, g2)*e(g1, h2)
         let lhs = GT::ate_pairing(&g1, &(g2 + h2));
         let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&g1, &h2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &g1, &h2);
+        let rhs_2 = GT::ate_mutli_pairing(vec![(&g1, &g2), (&g1, &h2)]);
         assert!(lhs == rhs);
         assert!(rhs_1 == rhs);
+        assert!(rhs_2 == rhs);
 
         let r = FieldElement::random();
         // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
@@ -153,5 +177,28 @@ mod test {
         p = p.pow(&r);
         assert!(p1 == p2);
         assert!(p1 == p);
+    }
+
+    #[test]
+    fn timing_ate_multi_pairing() {
+        let count = 10;
+        let g1_vec = (0..count).map(|_|G1::random()).collect::<Vec<G1>>();
+        let g2_vec = (0..count).map(|_|G2::random()).collect::<Vec<G2>>();
+        let mut tuple_vec = vec![];
+
+        let start = Instant::now();
+        let mut accum = GT::ate_pairing(&g1_vec[0], &g2_vec[0]);
+        tuple_vec.push((&g1_vec[0], &g2_vec[0]));
+        for i in 1..count {
+            let e = GT::ate_pairing(&g1_vec[i], &g2_vec[i]);
+            accum = GT::mul(&accum, &e);
+            tuple_vec.push((&g1_vec[i], &g2_vec[i]));
+        }
+        println!("Time to compute {} pairings naively is {:?}", count, start.elapsed());
+
+        let start = Instant::now();
+        let accum_multi = GT::ate_mutli_pairing(tuple_vec);
+        println!("Time to compute {} pairings using multi-pairings is {:?}", count, start.elapsed());
+        assert!(accum == accum_multi);
     }
 }

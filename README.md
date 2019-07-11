@@ -97,6 +97,12 @@ let z1 = x - y;
 let mut sum_1 = G2::identity();
 sum_1 += z;
 sum_1 += z1;
+
+// To check that G1 or G2 have correct order, i.e. the curve order
+let x = G1::random();
+assert!(x.has_correct_order());
+let y = G2::random();
+assert!(y.has_correct_order());
 ```
 
 Mutating versions of the above operations like addition/subtraction/negation/inversion are present but have to be called as methods like `b.negate()`
@@ -217,6 +223,9 @@ let m = GT::mul(&gt, &ht);
 
 // compute reduced ate pairing for 4 elements, i.e. e(g1, g2) * e (h1, h2)
 let p = GT::ate_2_pairing(&g1, &g2, &h1, &h2);
+
+// compute reduced ate multi-pairing. Takes a vector of tuples of group elements G1 and G2 as Vec<(&G1, &G2)>
+let e = GT::ate_mutli_pairing(tuple_vec);
 
 // Raise target group element to field element (GT^f)
 let r = FieldElement::random();

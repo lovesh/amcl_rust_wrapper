@@ -1,4 +1,4 @@
-use crate::constants::GroupG1_SIZE;
+use crate::constants::{GroupG1_SIZE, CurveOrder};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
@@ -109,6 +109,10 @@ impl GroupElement for G1 {
 
     fn is_extension() -> bool {
         return false
+    }
+
+    fn has_correct_order(&self) -> bool {
+        return self.value.mul(&CurveOrder).is_infinity()
     }
 }
 
@@ -533,6 +537,17 @@ mod test {
         expected_sum = expected_sum.plus(&b);
         expected_sum = expected_sum.plus(&c);
         assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn timing_correct_order_check() {
+        let count = 10;
+        let start = Instant::now();
+        for _ in 0..count {
+            let a = G1::random();
+            assert!(a.has_correct_order())
+        }
+        println!("For {} elements, time to check correct order is {:?}", count, start.elapsed())
     }
 
     #[test]
