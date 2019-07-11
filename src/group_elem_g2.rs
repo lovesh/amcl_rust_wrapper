@@ -107,6 +107,12 @@ impl GroupElement for G2 {
         self.to_ecp().tostring()
     }
 
+    fn negation(&self) -> Self {
+        let mut n = self.to_ecp();
+        n.neg();
+        n.into()
+    }
+
     fn is_extension() -> bool {
         return true
     }
@@ -284,6 +290,15 @@ mod test {
         expected_sum = expected_sum.plus(&b);
         expected_sum = expected_sum.plus(&c);
         assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn test_negation() {
+        for i in 0..10 {
+            let a = G2::random();
+            let b = a.negation();
+            assert!((a+b).is_identity())
+        }
     }
 
     #[test]

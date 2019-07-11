@@ -75,6 +75,9 @@ pub trait GroupElement: Clone + Sized {
     /// Returns hex string
     fn to_hex(&self) -> String;
 
+    /// Returns negation of this element
+    fn negation(&self) -> Self;
+
     fn is_extension() -> bool;
 
     /// Checks if the element has correct order by checking if self *  group order (curve order) == Identity element (point at infinity).
