@@ -10,16 +10,9 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct G1 {
     value: GroupG1,
-}
-
-impl fmt::Display for G1 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let c = self.value.clone();
-        write!(f, "{}", c.tostring())
-    }
 }
 
 impl GroupElement for G1 {
@@ -181,6 +174,8 @@ impl G1 {
     }
 }
 
+impl_group_elem_traits!(G1);
+
 impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
 
 impl_group_elem_ops!(G1);
@@ -302,7 +297,7 @@ impl G1Vector {
         check_vector_size_for_equality!(field_elems, self)?;
         let mut accum = G1::new();
         for i in 0..self.len() {
-            accum += self[i] * field_elems[i];
+            accum += self[i] * &field_elems[i];
         }
         Ok(accum)
     }
@@ -449,11 +444,11 @@ impl NafLookupTable5 {
 
 impl<'a> From<&'a G1> for NafLookupTable5 {
     fn from(A: &'a G1) -> Self {
-        let mut Ai = [G1::new(); 8];
+        let mut Ai: [G1; 8] = [G1::new(), G1::new(), G1::new(), G1::new(), G1::new(), G1::new(), G1::new(), G1::new()];
         let A2 = A.double();
         Ai[0] = A.clone();
         for i in 0..7 {
-            Ai[i + 1] = Ai[i] + A2;
+            Ai[i + 1] = Ai[i] + &A2;
         }
         // Now Ai = [A, 3A, 5A, 7A, 9A, 11A, 13A, 15A]
         Self(Ai)
@@ -467,106 +462,14 @@ mod test {
     use std::time::{Duration, Instant};
 
     #[test]
-    fn test_to_and_from_bytes() {
-        for _ in 0..100 {
-            let x = G1::random();
-            let mut bytes: [u8; GroupG1_SIZE] = [0; GroupG1_SIZE];
-            bytes.copy_from_slice(x.to_bytes().as_slice());
-            let y = G1::from(&bytes);
-            assert_eq!(x, y);
-
-            let bytes1 = x.to_bytes();
-            assert_eq!(x, G1::from_bytes(bytes1.as_slice()).unwrap());
-
-            // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
-            let mut bytes2 = bytes1.clone();
-            bytes2.push(0);
-            assert!(G1::from_bytes(bytes2.as_slice()).is_err());
-
-            // Decrease length of byte vector
-            assert!(G1::from_bytes(&bytes1[0..GroupG1_SIZE - 1]).is_err());
-        }
-    }
-
-    #[test]
-    fn test_hashing() {
-        // If the element can be added to HashSet or HashMap, it must be hashable.
-        let mut set = HashSet::new();
-        let mut map = HashMap::new();
-        set.insert(G1::random());
-        map.insert(G1::random(), G1::random());
-    }
-
-    #[test]
-    fn test_negating_group_elems() {
-        let b = G1::random();
-        let neg_b = -b;
-        assert_ne!(b, neg_b);
-        let neg_neg_b = -neg_b;
-        assert_eq!(b, neg_neg_b);
-        assert_eq!(b + neg_b, G1::identity());
-    }
-
-    #[test]
-    fn test_scalar_mult_operators() {
-        for _ in 0..10 {
-            let g = G1::random();
-            let f = FieldElement::random();
-            let m = g.scalar_mul_const_time(&f);
-            // Operands can be in any order
-            assert_eq!(m, g * f);
-            assert_eq!(m, f * g);
-        }
-    }
-
-    #[test]
     fn test_binary_scalar_mul() {
         for _ in 0..10 {
             let a = FieldElement::random();
             let b = FieldElement::random();
             let g = G1::random();
             let h = G1::random();
-            assert_eq!(g * a + h * b, g.binary_scalar_mul(&h, &a, &b))
+            assert_eq!(&g * &a + &h * &b, g.binary_scalar_mul(&h, &a, &b))
         }
-    }
-
-    #[test]
-    fn test_group_elem_addition() {
-        let a = G1::random();
-        let b = G1::random();
-        let c = G1::random();
-
-        let sum = a + b + c;
-
-        let mut expected_sum = G1::new();
-        expected_sum = expected_sum.plus(&a);
-        expected_sum = expected_sum.plus(&b);
-        expected_sum = expected_sum.plus(&c);
-        assert_eq!(sum, expected_sum);
-    }
-
-    #[test]
-    fn test_negation() {
-        for i in 0..10 {
-            let a = G1::random();
-            let b = a.negation();
-            assert!((a + b).is_identity())
-        }
-    }
-
-    #[test]
-    fn timing_correct_order_check() {
-        let count = 10;
-        let start = Instant::now();
-        for _ in 0..count {
-            let a = G1::random();
-            assert!(a.has_correct_order())
-        }
-        println!(
-            "For {} elements, time to check correct order is {:?}",
-            count,
-            start.elapsed()
-        )
     }
 
     #[test]
@@ -575,7 +478,7 @@ mod test {
             let a = G1::random();
             let mults = a.get_multiples(17);
             for i in 1..=17 {
-                assert_eq!(mults[i - 1], a * FieldElement::from(i as u8));
+                assert_eq!(mults[i - 1], &a * FieldElement::from(i as u8));
             }
         }
     }
@@ -587,7 +490,7 @@ mod test {
         let table = NafLookupTable5::from(&a);
         for i in x.iter() {
             let f = FieldElement::from(*i as u8);
-            let expected = a * f;
+            let expected = &a * f;
             assert_eq!(expected, table.select(*i as usize));
         }
     }
@@ -597,7 +500,7 @@ mod test {
         for _ in 0..100 {
             let a = G1::random();
             let r = FieldElement::random();
-            let expected = a * r;
+            let expected = a * &r;
 
             let table = NafLookupTable5::from(&a);
             let wnaf = r.to_wnaf(5);
@@ -743,7 +646,7 @@ mod test {
         let mut start = Instant::now();
         for i in 0..n {
             // The compiler might not execute the statement below
-            let _ = gv[i] * fv[i];
+            let _ = &gv[i] * &fv[i];
         }
         println!(
             "Time for {} scalar multiplications: {:?}",
@@ -765,7 +668,7 @@ mod test {
         );
     }
 
-    #[test]
+    /*#[test]
     fn timing_group_elem_addition_and_scalar_multiplication() {
         let count = 100;
         let points: Vec<_> = (0..100).map(|_| G1::random()).collect();
@@ -783,12 +686,12 @@ mod test {
         let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
         start = Instant::now();
         for i in 0..count {
-            points[i] * fs[i];
+            points[i] * &fs[i];
         }
         println!(
             "Scalar multiplication time for {} G1 elems = {:?}",
             count,
             start.elapsed()
         );
-    }
+    }*/
 }

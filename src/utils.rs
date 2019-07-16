@@ -7,7 +7,6 @@ use crate::constants::{CurveOrder, MODBYTES};
 use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
-use crate::group_elem_g1::G1;
 use amcl::sha3::{SHA3, SHAKE256};
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.

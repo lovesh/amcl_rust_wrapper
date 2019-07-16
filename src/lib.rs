@@ -17,6 +17,9 @@ pub use amcl::secp256k1 as ECCurve;
 #[cfg(feature = "ed25519")]
 pub use amcl::ed25519 as ECCurve;
 
+#[macro_use]
+extern crate clear_on_drop;
+
 pub mod constants;
 pub mod types;
 

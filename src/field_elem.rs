@@ -11,6 +11,8 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
 
+use clear_on_drop::clear::Clear;
+
 #[macro_export]
 macro_rules! add_field_elems {
     ( $( $elem:expr ),* ) => {
@@ -24,7 +26,7 @@ macro_rules! add_field_elems {
     };
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct FieldElement {
     value: BigNum,
 }
@@ -38,6 +40,16 @@ impl fmt::Display for FieldElement {
 impl Hash for FieldElement {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.to_bytes())
+    }
+}
+
+impl Default for FieldElement {
+    fn default() -> Self { Self::new() }
+}
+
+impl Drop for FieldElement {
+    fn drop(&mut self) {
+        self.value.w.clear();
     }
 }
 
@@ -86,6 +98,7 @@ impl FieldElement {
         BigNum::isunity(&self.value)
     }
 
+    /// Return bytes in MSB form
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut temp = BigNum::new_copy(&self.value);
         let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
@@ -93,6 +106,7 @@ impl FieldElement {
         bytes.to_vec()
     }
 
+    /// Expects bytes in MSB form
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != MODBYTES {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
@@ -354,17 +368,17 @@ impl FieldElement {
         // Construct c as [elems[0], elems[0]*elems[1], elems[0]*elems[1]*elems[2], .... elems[0]*elems[1]*elems[2]*...elems[k-1]]
         let mut c: Vec<Self> = vec![elems[0].clone()];
         for i in 1..k {
-            c.push(c[i - 1] * elems[i])
+            c.push(&c[i - 1] * &elems[i])
         }
 
         // u = 1 / elems[0]*elems[1]*elems[2]*...elems[k-1]
         let all_inv = c[k - 1].inverse();
-        let mut u = all_inv;
+        let mut u = all_inv.clone();
         let mut inverses = vec![FieldElement::one(); k];
 
         for i in (1..k).rev() {
-            inverses[i] = u * c[i - 1];
-            u = u * elems[i];
+            inverses[i] = &u * &c[i - 1];
+            u = &u * &elems[i];
         }
 
         inverses[0] = u;
@@ -490,6 +504,12 @@ impl AddAssign for FieldElement {
     }
 }
 
+impl<'a> AddAssign<&'a FieldElement> for FieldElement {
+    fn add_assign(&mut self, other: &'a FieldElement) {
+        self.add_assign_(other)
+    }
+}
+
 impl Sub for FieldElement {
     type Output = Self;
 
@@ -525,6 +545,12 @@ impl<'a> Sub<&'a FieldElement> for &FieldElement {
 impl SubAssign for FieldElement {
     fn sub_assign(&mut self, other: Self) {
         self.sub_assign_(&other)
+    }
+}
+
+impl<'a> SubAssign<&'a FieldElement> for FieldElement {
+    fn sub_assign(&mut self, other: &'a Self) {
+        self.sub_assign_(other)
     }
 }
 
@@ -650,7 +676,7 @@ impl FieldElementVector {
     pub fn scaled_by(&self, n: &FieldElement) -> Self {
         let mut scaled = Vec::<FieldElement>::with_capacity(self.len());
         for i in 0..self.len() {
-            scaled.push(self[i] * n)
+            scaled.push(&self[i] * n)
         }
         scaled.into()
     }
@@ -660,7 +686,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            sum_vector.push(self[i] + b.elems[i])
+            sum_vector.push(&self[i] + &b.elems[i])
         }
         Ok(sum_vector)
     }
@@ -670,7 +696,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            diff_vector.push(self[i] - b[i])
+            diff_vector.push(&self[i] - &b[i])
         }
         Ok(diff_vector)
     }
@@ -679,7 +705,7 @@ impl FieldElementVector {
     pub fn sum(&self) -> FieldElement {
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
-            accum += self[i];
+            accum += &self[i];
         }
         accum
     }
@@ -690,7 +716,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
-            accum += self[i] * b[i];
+            accum += &self[i] * &b[i];
         }
         Ok(accum)
     }
@@ -705,7 +731,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut hadamard_product = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            hadamard_product.push(self[i] * b[i]);
+            hadamard_product.push(&self[i] * &b[i]);
         }
         Ok(hadamard_product)
     }
@@ -780,7 +806,7 @@ pub fn multiply_row_vector_with_matrix(
     let mut out = FieldElementVector::new(out_len);
     for i in 0..out_len {
         for j in 0..vector.len() {
-            out[i] += vector[j] * matrix[j][i];
+            out[i] += &vector[j] * &matrix[j][i];
         }
     }
     Ok(out)
@@ -952,9 +978,9 @@ mod test {
     #[test]
     fn test_negating_field_elems() {
         let b = FieldElement::random();
-        let neg_b = -b;
+        let neg_b = -&b;
         assert_ne!(b, neg_b);
-        let neg_neg_b = -neg_b;
+        let neg_neg_b = -&neg_b;
         assert_eq!(b, neg_neg_b);
         assert_eq!(b + neg_b, FieldElement::zero());
     }
@@ -965,12 +991,12 @@ mod test {
         let b = FieldElement::random();
         let c = FieldElement::random();
 
-        let sum = a + b + c;
+        let sum = &a + &b + &c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
         expected_sum = expected_sum.plus(&b);
-        expected_sum += c;
+        expected_sum += &c;
         assert_eq!(sum, expected_sum);
     }
 
@@ -980,12 +1006,12 @@ mod test {
         let b = FieldElement::random();
         let c = FieldElement::random();
 
-        let sum = a - b - c;
+        let sum = &a - &b - &c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
-        expected_sum = expected_sum - b;
-        expected_sum -= c;
+        expected_sum = expected_sum - &b;
+        expected_sum -= &c;
         assert_eq!(sum, expected_sum);
     }
 
@@ -1097,7 +1123,7 @@ mod test {
         let mut expected_inv_product = FieldElement::one();
         for i in 0..count {
             assert_eq!(inverses[i], inverses_1[i]);
-            expected_inv_product = expected_inv_product * inverses[i];
+            expected_inv_product = expected_inv_product * &inverses[i];
         }
 
         assert_eq!(expected_inv_product, all_inv);
@@ -1110,7 +1136,7 @@ mod test {
         let mut R = FieldElement::random();
         let start = Instant::now();
         for i in 0..count {
-            R = R + points[i];
+            R = &R + &points[i];
         }
         println!("Addition time for {} elems = {:?}", count, start.elapsed());
     }

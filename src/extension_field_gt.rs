@@ -241,8 +241,8 @@ mod test {
 
         let r = FieldElement::random();
         // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
-        let p1 = GT::ate_pairing(&g1, &(g2 * r));
-        let p2 = GT::ate_pairing(&(g1 * r), &g2);
+        let p1 = GT::ate_pairing(&g1, &(g2 * &r));
+        let p2 = GT::ate_pairing(&(g1 * &r), &g2);
         let mut p = GT::ate_pairing(&g1, &g2);
         p = p.pow(&r);
         assert!(p1 == p2);
