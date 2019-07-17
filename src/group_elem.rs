@@ -310,6 +310,97 @@ macro_rules! impl_scalar_mul_ops {
     };
 }
 
+macro_rules! impl_group_element_lookup_table {
+    ( $group_element:ident, $name:ident  ) => {
+        pub struct $name([$group_element; 8]);
+
+        impl $name {
+            /// Given public A and odd x with 0 < x < 2^4, return x.A.
+            pub fn select(&self, x: usize) -> &$group_element {
+                debug_assert_eq!(x & 1, 1);
+                debug_assert!(x < 16);
+
+                &self.0[x / 2]
+            }
+        }
+
+        impl<'a> From<&'a $group_element> for $name {
+            fn from(A: &'a $group_element) -> Self {
+                let mut Ai: [$group_element; 8] = [$group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new()];
+                let A2 = A.double();
+                Ai[0] = A.clone();
+                for i in 0..7 {
+                    Ai[i + 1] = &Ai[i] + &A2;
+                }
+                // Now Ai = [A, 3A, 5A, 7A, 9A, 11A, 13A, 15A]
+                Self(Ai)
+            }
+        }
+    }
+}
+
+macro_rules! impl_optmz_scalar_mul_ops {
+    ( $group_element:ident, $group:ident, $lookup_table:ident ) => {
+        impl $group_element {
+            /// Return underlying elliptic curve point, ECP
+            pub fn to_ecp(&self) -> $group {
+                self.value.clone()
+            }
+
+            /// Computes sum of 2 scalar multiplications.
+            /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
+            /// returns self*a + h*b
+            pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
+                self.value
+                    .mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum())
+                    .into()
+            }
+
+            /// Multiply point on the curve (element of group G1) with a scalar. Variable time operation
+            /// Uses wNAF.
+            pub fn scalar_mul_variable_time(&self, a: &FieldElement) -> Self {
+                // TODO: Optimization: Attach the lookup table to the struct
+                let table = $lookup_table::from(self);
+                let wnaf = a.to_wnaf(5);
+                $group_element::wnaf_mul(&table, &wnaf)
+            }
+
+            /// Return multiples of itself. eg. Given `n`=5, returns self, 2*self, 3*self, 4*self, 5*self
+            pub fn get_multiples(&self, n: usize) -> Vec<$group_element> {
+                // TODO: Can use `selector` from ECP
+                let mut res = vec![self.clone()];
+                for i in 2..=n {
+                    res.push(&res[i - 2] + self);
+                }
+                res
+            }
+
+            pub fn to_wnaf_lookup_table(&self, width: usize) -> $lookup_table {
+                // Only supporting table of width 5 for now
+                debug_assert_eq!(width, 5);
+                $lookup_table::from(self)
+            }
+
+            pub fn wnaf_mul(table: &$lookup_table, wnaf: &[i8]) -> Self {
+                let mut result = $group_element::identity();
+
+                for n in wnaf.iter().rev() {
+                    result = result.double();
+
+                    let v = *n;
+                    if v > 0 {
+                        result = result + table.select(v as usize);
+                    } else if v < 0 {
+                        result = result - table.select(-v as usize);
+                    }
+                }
+
+                result
+            }
+        }
+    };
+}
+
 pub trait GroupElementVector<T>: Sized {
     fn new(size: usize) -> Self;
 
@@ -417,7 +508,200 @@ macro_rules! impl_group_elem_vec_ops {
                 self.as_slice().iter()
             }
         }
+
     };
+}
+
+macro_rules! impl_group_elem_vec_product_ops {
+    ( $group_element:ident, $group_element_vec:ident, $lookup_table:ident ) => {
+
+        impl $group_element_vec {
+            /// Computes inner product of 2 vectors, one of field elements and other of group elements.
+            /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
+            pub fn inner_product_const_time(&self, b: &FieldElementVector) -> Result<$group_element, ValueError> {
+                self.multi_scalar_mul_const_time(b)
+            }
+
+            pub fn inner_product_var_time(&self, b: &FieldElementVector) -> Result<$group_element, ValueError> {
+                self.multi_scalar_mul_var_time(b)
+            }
+
+            pub fn inner_product_var_time_with_ref_vecs(
+                group_elems: Vec<&$group_element>,
+                field_elems: Vec<&FieldElement>) -> Result<$group_element, ValueError> {
+                Self::multi_scalar_mul_var_time_from_ref_vecs(group_elems, field_elems)
+            }
+
+            /// Calculates Hadamard product of 2 group element vectors.
+            /// Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
+            /// Here `o` denotes group operation, which in elliptic curve is point addition
+            pub fn hadamard_product(&self, b: &Self) -> Result<Self, ValueError> {
+                check_vector_size_for_equality!(self, b)?;
+                let mut hadamard_product = Self::with_capacity(self.len());
+                for i in 0..self.len() {
+                    hadamard_product.push(&self[i] + &b[i]);
+                }
+                Ok(hadamard_product)
+            }
+
+            pub fn split_at(&self, mid: usize) -> (Self, Self) {
+                let (l, r) = self.as_slice().split_at(mid);
+                (Self::from(l), Self::from(r))
+            }
+
+            /// Constant time multi-scalar multiplication. Naive approach computing `n` scalar
+            /// multiplications and n-1 additions for `n` field elements
+            pub fn multi_scalar_mul_const_time_naive(
+                &self,
+                field_elems: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
+                check_vector_size_for_equality!(field_elems, self)?;
+                let mut accum = $group_element::new();
+                for i in 0..self.len() {
+                    accum += &self[i] * &field_elems[i];
+                }
+                Ok(accum)
+            }
+
+            /// Constant time multi-scalar multiplication
+            pub fn multi_scalar_mul_const_time(
+                &self,
+                field_elems: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
+                Self::_multi_scalar_mul_const_time(&self, field_elems)
+            }
+
+            /// Variable time multi-scalar multiplication
+            pub fn multi_scalar_mul_var_time(
+                &self,
+                field_elems: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
+                let fs: Vec<&FieldElement> = field_elems.iter().map(|f| f).collect();
+                Self::_multi_scalar_mul_var_time(&self, fs)
+            }
+
+            /// Strauss multi-scalar multiplication
+            fn _multi_scalar_mul_var_time(
+                group_elems: &$group_element_vec,
+                field_elems: Vec<&FieldElement>,
+            ) -> Result<$group_element, ValueError> {
+                check_vector_size_for_equality!(field_elems, group_elems)?;
+                let lookup_tables: Vec<_> = group_elems
+                    .as_slice()
+                    .into_iter()
+                    .map(|e| $lookup_table::from(e))
+                    .collect();
+
+                Self::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, field_elems)
+            }
+
+            pub fn multi_scalar_mul_var_time_from_ref_vecs(
+                group_elems: Vec<&$group_element>,
+                field_elems: Vec<&FieldElement>,
+            ) -> Result<$group_element, ValueError> {
+                check_vector_size_for_equality!(field_elems, group_elems)?;
+                let lookup_tables: Vec<_> = group_elems
+                    .iter()
+                    .map(|e| $lookup_table::from(*e))
+                    .collect();
+
+                Self::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, field_elems)
+            }
+
+            /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
+            pub fn multi_scalar_mul_var_time_with_precomputation_done(
+                lookup_tables: &[$lookup_table],
+                field_elems: Vec<&FieldElement>,
+            ) -> Result<$group_element, ValueError> {
+                // Redundant check when called from multi_scalar_mul_var_time
+                check_vector_size_for_equality!(field_elems, lookup_tables)?;
+
+                let mut nafs: Vec<_> = field_elems
+                    .iter()
+                    .map(|e| e.to_wnaf(5))
+                    .collect();
+
+                // Pad the NAFs with 0 so that all nafs are of same length
+                let new_length = pad_collection!(nafs, 0);
+
+                let mut r = $group_element::identity();
+
+                for i in (0..new_length).rev() {
+                    let mut t = r.double();
+
+                    for (naf, lookup_table) in nafs.iter().zip(lookup_tables.iter()) {
+                        if naf[i] > 0 {
+                            t = t + lookup_table.select(naf[i] as usize);
+                        } else if naf[i] < 0 {
+                            t = t - lookup_table.select(-naf[i] as usize);
+                        }
+                    }
+                    r = t;
+                }
+
+                Ok(r)
+            }
+
+            /// Constant time multi-scalar multiplication.
+            /// Taken from Guide to Elliptic Curve Cryptography book, "Algorithm 3.48 Simultaneous multiple point multiplication" without precomputing the addition
+            /// Still helps with reducing doublings
+            fn _multi_scalar_mul_const_time(
+                group_elems: &$group_element_vec,
+                field_elems: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
+                check_vector_size_for_equality!(field_elems, group_elems)?;
+
+                // Choosing window of size 3.
+                let group_elem_multiples: Vec<_> = group_elems
+                    .as_slice()
+                    .into_iter()
+                    .map(|e| e.get_multiples(7)) // 2^3 - 1
+                    .collect();
+
+                Self::multi_scalar_mul_const_time_with_precomputation_done(
+                    &group_elem_multiples,
+                    field_elems,
+                )
+            }
+
+            pub fn multi_scalar_mul_const_time_with_precomputation_done(
+                group_elem_multiples: &Vec<Vec<$group_element>>,
+                field_elems: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
+                // Redundant check when called from multi_scalar_mul_const_time
+                check_vector_size_for_equality!(group_elem_multiples, field_elems)?;
+
+                // TODO: The test shows that precomputing multiples does not help much. Experiment with bigger window.
+
+                let mut field_elems_base_repr: Vec<_> = field_elems
+                    .as_slice()
+                    .into_iter()
+                    .map(|e| e.to_power_of_2_base(3))
+                    .collect();
+
+                // Pad the representations with 0 so that all are of same length
+                let new_length = pad_collection!(field_elems_base_repr, 0);
+
+                let mut r = $group_element::new();
+                for i in (0..new_length).rev() {
+                    // r = r * 2^3
+                    r.double_mut();
+                    r.double_mut();
+                    r.double_mut();
+                    for (b, m) in field_elems_base_repr
+                        .iter()
+                        .zip(group_elem_multiples.iter())
+                    {
+                        // TODO: The following can be replaced with a pre-computation.
+                        if b[i] != 0 {
+                            r = r + &m[(b[i] - 1) as usize]
+                        }
+                    }
+                }
+                Ok(r)
+            }
+        }
+    }
 }
 
 #[macro_export]

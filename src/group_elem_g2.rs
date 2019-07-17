@@ -131,6 +131,8 @@ impl_group_elem_ops!(G2);
 
 impl_scalar_mul_ops!(G2);
 
+//impl_group_element_lookup_table!(G2, G2LookupTable);
+
 #[derive(Clone, Debug)]
 pub struct G2Vector {
     elems: Vec<G2>,
