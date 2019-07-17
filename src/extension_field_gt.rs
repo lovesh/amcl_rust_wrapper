@@ -120,7 +120,7 @@ mod test {
         let g2_identity = G2::identity();
 
         // e(g1 + identity, g2) == e(g1, g2)*e(identity, g2)
-        let lhs = GT::ate_pairing(&(g1 + g1_identity), &g2);
+        let lhs = GT::ate_pairing(&(&g1 + &g1_identity), &g2);
         let rhs = GT::mul(
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1_identity, &g2),
@@ -128,7 +128,7 @@ mod test {
         assert!(lhs == rhs);
 
         // e(g1, g2 + identity) == e(g1, g2)*e(g1, identity)
-        let lhs = GT::ate_pairing(&g1, &(g2 + g2_identity));
+        let lhs = GT::ate_pairing(&g1, &(&g2 + &g2_identity));
         let rhs = GT::mul(
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1, &g2_identity),
@@ -197,8 +197,8 @@ mod test {
     fn test_ate_pairing_negative() {
         let g1 = G1::random();
         let g2 = G2::random();
-        let g1_neg = -g1;
-        let g2_neg = -g2;
+        let g1_neg = -&g1;
+        let g2_neg = -&g2;
 
         // e(g1, -g2) = e(-g1, g2)
         let lhs = GT::ate_pairing(&g1, &g2_neg);
@@ -222,7 +222,7 @@ mod test {
         let h2 = G2::random();
 
         // e(g1 + h1, g2) == e(g1, g2)*e(h1, g2)
-        let lhs = GT::ate_pairing(&(g1 + h1), &g2);
+        let lhs = GT::ate_pairing(&(&g1 + &h1), &g2);
         let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&h1, &g2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &h1, &g2);
         let rhs_2 = GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &g2)]);
@@ -231,7 +231,7 @@ mod test {
         assert!(rhs_2 == rhs);
 
         // e(g1, g2+h2) == e(g1, g2)*e(g1, h2)
-        let lhs = GT::ate_pairing(&g1, &(g2 + h2));
+        let lhs = GT::ate_pairing(&g1, &(&g2 + &h2));
         let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&g1, &h2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &g1, &h2);
         let rhs_2 = GT::ate_mutli_pairing(vec![(&g1, &g2), (&g1, &h2)]);
@@ -241,8 +241,8 @@ mod test {
 
         let r = FieldElement::random();
         // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
-        let p1 = GT::ate_pairing(&g1, &(g2 * &r));
-        let p2 = GT::ate_pairing(&(g1 * &r), &g2);
+        let p1 = GT::ate_pairing(&g1, &(&g2 * &r));
+        let p2 = GT::ate_pairing(&(&g1 * &r), &g2);
         let mut p = GT::ate_pairing(&g1, &g2);
         p = p.pow(&r);
         assert!(p1 == p2);

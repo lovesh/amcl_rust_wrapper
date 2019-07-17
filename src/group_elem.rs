@@ -171,9 +171,22 @@ macro_rules! impl_group_elem_ops {
             }
         }
 
+        impl<'a> Add<&'a $group_element> for &$group_element {
+            type Output = $group_element;
+            fn add(self, other: &'a $group_element) -> $group_element {
+                self.plus(other)
+            }
+        }
+
         impl AddAssign for $group_element {
             fn add_assign(&mut self, other: Self) {
                 self.add_assign_(&other)
+            }
+        }
+
+        impl<'a> AddAssign<&'a $group_element> for $group_element {
+            fn add_assign(&mut self, other: &'a $group_element) {
+                self.add_assign_(other)
             }
         }
 
@@ -182,6 +195,28 @@ macro_rules! impl_group_elem_ops {
 
             fn sub(self, other: Self) -> Self {
                 self.minus(&other)
+            }
+        }
+
+        impl Sub<$group_element> for &$group_element {
+            type Output = $group_element;
+
+            fn sub(self, other: $group_element) -> $group_element {
+                self.minus(&other)
+            }
+        }
+
+        impl<'a> Sub<&'a $group_element> for $group_element {
+            type Output = Self;
+            fn sub(self, other: &'a $group_element) -> Self {
+                self.minus(other)
+            }
+        }
+
+        impl<'a> Sub<&'a $group_element> for &$group_element {
+            type Output = $group_element;
+            fn sub(self, other: &'a $group_element) -> $group_element {
+                self.minus(other)
             }
         }
 
@@ -309,6 +344,85 @@ pub trait GroupElementVector<T>: Sized {
 #[macro_export]
 macro_rules! impl_group_elem_vec_ops {
     ( $group_element:ident, $group_element_vec:ident ) => {
+        impl GroupElementVector<$group_element> for $group_element_vec {
+            fn new(size: usize) -> Self {
+                Self {
+                    elems: (0..size).map(|_| $group_element::new()).collect(),
+                }
+            }
+
+            fn with_capacity(capacity: usize) -> Self {
+                Self {
+                    elems: Vec::<$group_element>::with_capacity(capacity),
+                }
+            }
+
+            fn as_slice(&self) -> &[$group_element] {
+                &self.elems
+            }
+
+            fn len(&self) -> usize {
+                self.elems.len()
+            }
+
+            fn push(&mut self, value: $group_element) {
+                self.elems.push(value)
+            }
+
+            fn append(&mut self, other: &mut Self) {
+                self.elems.append(&mut other.elems)
+            }
+
+            fn sum(&self) -> $group_element {
+                let mut accum = $group_element::new();
+                for i in 0..self.len() {
+                    accum += &self[i];
+                }
+                accum
+            }
+
+            fn scale(&mut self, n: &FieldElement) {
+                for i in 0..self.len() {
+                    self[i] = &self[i] * n;
+                }
+            }
+
+            fn scaled_by(&self, n: &FieldElement) -> Self {
+                let mut scaled = Self::with_capacity(self.len());
+                for i in 0..self.len() {
+                    scaled.push(&self[i] * n)
+                }
+                scaled.into()
+            }
+
+            fn plus(&self, b: &Self) -> Result<Self, ValueError> {
+                check_vector_size_for_equality!(self, b)?;
+                let mut sum_vector = Self::with_capacity(self.len());
+                for i in 0..self.len() {
+                    sum_vector.push(&self[i] + &b.elems[i])
+                }
+                Ok(sum_vector)
+            }
+
+            fn minus(&self, b: &Self) -> Result<Self, ValueError> {
+                check_vector_size_for_equality!(self, b)?;
+                let mut diff_vector = Self::with_capacity(self.len());
+                for i in 0..self.len() {
+                    diff_vector.push(&self[i] - &b[i])
+                }
+                Ok(diff_vector)
+            }
+
+            fn iter(&self) -> Iter<$group_element> {
+                self.as_slice().iter()
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_group_elem_vec_conversions {
+    ( $group_element:ident, $group_element_vec:ident ) => {
         impl From<Vec<$group_element>> for $group_element_vec {
             fn from(x: Vec<$group_element>) -> Self {
                 Self { elems: x }
@@ -426,11 +540,11 @@ mod test {
             ( $group:ident ) => {
                 {
                     let b = $group::random();
-                    let neg_b = -b;
+                    let neg_b = -&b;
                     assert_ne!(b, neg_b);
-                    let neg_neg_b = -neg_b;
+                    let neg_neg_b = -&neg_b;
                     assert_eq!(b, neg_neg_b);
-                    assert_eq!(b + neg_b, $group::identity());
+                    assert_eq!(&b + &neg_b, $group::identity());
                 }
             };
         }
@@ -470,7 +584,7 @@ mod test {
                     let b = G1::random();
                     let c = G1::random();
 
-                    let sum = a + b + c;
+                    let sum = &a + &b + &c;
 
                     let mut expected_sum = G1::new();
                     expected_sum = expected_sum.plus(&a);
@@ -535,7 +649,7 @@ mod test {
                     let mut R = $group::random();
                     let mut start = Instant::now();
                     for i in 0..count {
-                        R = R + points[i];
+                        R = R + &points[i];
                     }
                     println!(
                         "Addition time for {} elems = {:?}",
@@ -546,7 +660,7 @@ mod test {
                     let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
                     start = Instant::now();
                     for i in 0..count {
-                        points[i] * &fs[i];
+                        &points[i] * &fs[i];
                     }
                     println!(
                         "Scalar multiplication time for {} elems = {:?}",

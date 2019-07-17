@@ -135,7 +135,7 @@ impl G1 {
     /// Uses wNAF.
     pub fn scalar_mul_variable_time(&self, a: &FieldElement) -> Self {
         // TODO: Optimization: Attach the lookup table to the struct
-        let table = NafLookupTable5::from(self);
+        let table = G1LookupTable::from(self);
         let wnaf = a.to_wnaf(5);
         G1::wnaf_mul(&table, &wnaf)
     }
@@ -145,18 +145,18 @@ impl G1 {
         // TODO: Can use `selector` from ECP
         let mut res = vec![self.clone()];
         for i in 2..=n {
-            res.push(res[i - 2] + self);
+            res.push(&res[i - 2] + self);
         }
         res
     }
 
-    pub fn to_wnaf_lookup_table(&self, width: usize) -> NafLookupTable5 {
+    pub fn to_wnaf_lookup_table(&self, width: usize) -> G1LookupTable {
         // Only supporting table of width 5 for now
         debug_assert_eq!(width, 5);
-        NafLookupTable5::from(self)
+        G1LookupTable::from(self)
     }
 
-    pub fn wnaf_mul(table: &NafLookupTable5, wnaf: &[i8]) -> Self {
+    pub fn wnaf_mul(table: &G1LookupTable, wnaf: &[i8]) -> Self {
         let mut result = G1::identity();
 
         for n in wnaf.iter().rev() {
@@ -187,79 +187,9 @@ pub struct G1Vector {
     elems: Vec<G1>,
 }
 
-impl GroupElementVector<G1> for G1Vector {
-    fn new(size: usize) -> Self {
-        Self {
-            elems: (0..size).map(|_| G1::new()).collect(),
-        }
-    }
+impl_group_elem_vec_ops!(G1, G1Vector);
 
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            elems: Vec::<G1>::with_capacity(capacity),
-        }
-    }
-
-    fn as_slice(&self) -> &[G1] {
-        &self.elems
-    }
-
-    fn len(&self) -> usize {
-        self.elems.len()
-    }
-
-    fn push(&mut self, value: G1) {
-        self.elems.push(value)
-    }
-
-    fn append(&mut self, other: &mut Self) {
-        self.elems.append(&mut other.elems)
-    }
-
-    fn sum(&self) -> G1 {
-        let mut accum = G1::new();
-        for i in 0..self.len() {
-            accum += self[i];
-        }
-        accum
-    }
-
-    fn scale(&mut self, n: &FieldElement) {
-        for i in 0..self.len() {
-            self[i] = self[i] * n;
-        }
-    }
-
-    fn scaled_by(&self, n: &FieldElement) -> Self {
-        let mut scaled = Self::with_capacity(self.len());
-        for i in 0..self.len() {
-            scaled.push(self[i] * n)
-        }
-        scaled.into()
-    }
-
-    fn plus(&self, b: &Self) -> Result<Self, ValueError> {
-        check_vector_size_for_equality!(self, b)?;
-        let mut sum_vector = Self::with_capacity(self.len());
-        for i in 0..self.len() {
-            sum_vector.push(self[i] + b.elems[i])
-        }
-        Ok(sum_vector)
-    }
-
-    fn minus(&self, b: &Self) -> Result<Self, ValueError> {
-        check_vector_size_for_equality!(self, b)?;
-        let mut diff_vector = Self::with_capacity(self.len());
-        for i in 0..self.len() {
-            diff_vector.push(self[i] - b[i])
-        }
-        Ok(diff_vector)
-    }
-
-    fn iter(&self) -> Iter<G1> {
-        self.as_slice().iter()
-    }
-}
+impl_group_elem_vec_conversions!(G1, G1Vector);
 
 impl G1Vector {
     /// Computes inner product of 2 vectors, one of field elements and other of group elements.
@@ -279,7 +209,7 @@ impl G1Vector {
         check_vector_size_for_equality!(self, b)?;
         let mut hadamard_product = Self::with_capacity(self.len());
         for i in 0..self.len() {
-            hadamard_product.push(self[i].plus(&b[i]));
+            hadamard_product.push(&self[i] + &b[i]);
         }
         Ok(hadamard_product)
     }
@@ -297,7 +227,7 @@ impl G1Vector {
         check_vector_size_for_equality!(field_elems, self)?;
         let mut accum = G1::new();
         for i in 0..self.len() {
-            accum += self[i] * &field_elems[i];
+            accum += &self[i] * &field_elems[i];
         }
         Ok(accum)
     }
@@ -327,7 +257,7 @@ impl G1Vector {
         let lookup_tables: Vec<_> = group_elems
             .as_slice()
             .into_iter()
-            .map(|e| NafLookupTable5::from(e))
+            .map(|e| G1LookupTable::from(e))
             .collect();
 
         Self::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, field_elems)
@@ -335,7 +265,7 @@ impl G1Vector {
 
     /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
     pub fn multi_scalar_mul_var_time_with_precomputation_done(
-        lookup_tables: &[NafLookupTable5],
+        lookup_tables: &[G1LookupTable],
         field_elems: &FieldElementVector,
     ) -> Result<G1, ValueError> {
         // Redundant check when called from multi_scalar_mul_var_time
@@ -420,7 +350,7 @@ impl G1Vector {
             {
                 // TODO: The following can be replaced with a pre-computation.
                 if b[i] != 0 {
-                    r = r + m[(b[i] - 1) as usize]
+                    r = r + &m[(b[i] - 1) as usize]
                 }
             }
         }
@@ -428,27 +358,25 @@ impl G1Vector {
     }
 }
 
-impl_group_elem_vec_ops!(G1, G1Vector);
+pub struct G1LookupTable([G1; 8]);
 
-pub struct NafLookupTable5([G1; 8]);
-
-impl NafLookupTable5 {
+impl G1LookupTable {
     /// Given public A and odd x with 0 < x < 2^4, return x.A.
-    pub fn select(&self, x: usize) -> G1 {
+    pub fn select(&self, x: usize) -> &G1 {
         debug_assert_eq!(x & 1, 1);
         debug_assert!(x < 16);
 
-        self.0[x / 2]
+        &self.0[x / 2]
     }
 }
 
-impl<'a> From<&'a G1> for NafLookupTable5 {
+impl<'a> From<&'a G1> for G1LookupTable {
     fn from(A: &'a G1) -> Self {
         let mut Ai: [G1; 8] = [G1::new(), G1::new(), G1::new(), G1::new(), G1::new(), G1::new(), G1::new(), G1::new()];
         let A2 = A.double();
         Ai[0] = A.clone();
         for i in 0..7 {
-            Ai[i + 1] = Ai[i] + &A2;
+            Ai[i + 1] = &Ai[i] + &A2;
         }
         // Now Ai = [A, 3A, 5A, 7A, 9A, 11A, 13A, 15A]
         Self(Ai)
@@ -478,7 +406,7 @@ mod test {
             let a = G1::random();
             let mults = a.get_multiples(17);
             for i in 1..=17 {
-                assert_eq!(mults[i - 1], &a * FieldElement::from(i as u8));
+                assert_eq!(mults[i - 1], (&a * FieldElement::from(i as u8)));
             }
         }
     }
@@ -487,11 +415,11 @@ mod test {
     fn test_NafLookupTable5() {
         let a = G1::random();
         let x = [1, 3, 5, 7, 9, 11, 13, 15];
-        let table = NafLookupTable5::from(&a);
+        let table = G1LookupTable::from(&a);
         for i in x.iter() {
             let f = FieldElement::from(*i as u8);
             let expected = &a * f;
-            assert_eq!(expected, table.select(*i as usize));
+            assert_eq!(expected, *table.select(*i as usize));
         }
     }
 
@@ -500,9 +428,9 @@ mod test {
         for _ in 0..100 {
             let a = G1::random();
             let r = FieldElement::random();
-            let expected = a * &r;
+            let expected = &a * &r;
 
-            let table = NafLookupTable5::from(&a);
+            let table = G1LookupTable::from(&a);
             let wnaf = r.to_wnaf(5);
             let p = G1::wnaf_mul(&table, &wnaf);
 
@@ -532,7 +460,7 @@ mod test {
             let mut expected_1 = G1::new();
             for i in 0..fs.len() {
                 expected.add_assign_(&gs[i].scalar_mul_const_time(&fs[i]));
-                expected_1.add_assign_(&(gs[i] * &fs[i]));
+                expected_1.add_assign_(&(&gs[i] * &fs[i]));
             }
 
             let res_2 = G1Vector::_multi_scalar_mul_const_time(&gv, &fv).unwrap();
@@ -667,31 +595,4 @@ mod test {
             start.elapsed()
         );
     }
-
-    /*#[test]
-    fn timing_group_elem_addition_and_scalar_multiplication() {
-        let count = 100;
-        let points: Vec<_> = (0..100).map(|_| G1::random()).collect();
-        let mut R = G1::random();
-        let mut start = Instant::now();
-        for i in 0..count {
-            R = R + points[i];
-        }
-        println!(
-            "Addition time for {} G1 elems = {:?}",
-            count,
-            start.elapsed()
-        );
-
-        let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
-        start = Instant::now();
-        for i in 0..count {
-            points[i] * &fs[i];
-        }
-        println!(
-            "Scalar multiplication time for {} G1 elems = {:?}",
-            count,
-            start.elapsed()
-        );
-    }*/
 }
