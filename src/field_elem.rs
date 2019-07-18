@@ -13,6 +13,9 @@ use std::slice::Iter;
 
 use clear_on_drop::clear::Clear;
 
+use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+
 #[macro_export]
 macro_rules! add_field_elems {
     ( $( $elem:expr ),* ) => {
@@ -395,6 +398,40 @@ impl FieldElement {
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
         let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
         barrett_reduction(&x, &CurveOrder, k, &u, &v)
+    }
+}
+
+impl Serialize for FieldElement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
+        serializer.serialize_newtype_struct("FieldElement", &self.to_bytes())
+    }
+}
+impl<'a> Deserialize<'a> for FieldElement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'a>,
+    {
+        struct FieldElementVisitor;
+
+        impl<'a> Visitor<'a> for FieldElementVisitor {
+            type Value = FieldElement;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("expected FieldElement")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<FieldElement, E>
+                where
+                    E: DError,
+            {
+                Ok(FieldElement::from_bytes(value.as_bytes()).map_err(DError::custom)?)
+            }
+        }
+
+        deserializer.deserialize_str(FieldElementVisitor)
     }
 }
 
@@ -818,6 +855,7 @@ mod test {
     use amcl::bls381::big::BIG;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+    use serde_json;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -1199,5 +1237,26 @@ mod test {
         println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
 
         assert_eq!(BigNum::comp(&x, &y), 0);
+    }
+
+    #[test]
+    fn test_serialization_deserialization() {
+        #[derive(Serialize, Deserialize)]
+        struct Temp {
+            val: FieldElement,
+        }
+        let r = FieldElement::random();
+        let s = Temp {
+            val: r.clone(),
+        };
+        let serialized = serde_json::to_string(&s);
+
+        assert!(serialized.is_ok());
+
+        let f: Result<Temp, _> = serde_json::from_str(&serialized.unwrap());
+
+        assert!(f.is_ok());
+
+        assert_eq!(f.unwrap().val, r)
     }
 }

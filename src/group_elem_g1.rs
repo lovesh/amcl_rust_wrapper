@@ -12,6 +12,9 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
+use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+
 #[derive(Clone, Debug)]
 pub struct G1 {
     value: GroupG1,

@@ -2,6 +2,7 @@ use rand::{CryptoRng, RngCore};
 
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
+
 use std::slice::Iter;
 
 #[macro_export]
@@ -137,6 +138,41 @@ macro_rules! impl_group_elem_traits {
             fn drop(&mut self) {
                 // x, y and z of ECP and ECP2 are private. So the only sensible way of zeroing them out seems setting them to infinity
                 self.value.inf()
+            }
+        }
+
+        impl Serialize for $group_element {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: Serializer,
+            {
+                serializer.serialize_newtype_struct("$group_element", &self.to_bytes())
+            }
+        }
+
+        impl<'a> Deserialize<'a> for $group_element {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: Deserializer<'a>,
+            {
+                struct GroupElemVisitor;
+
+                impl<'a> Visitor<'a> for GroupElemVisitor {
+                    type Value = $group_element;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("expected $group_element")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<$group_element, E>
+                        where
+                            E: DError,
+                    {
+                        Ok($group_element::from_bytes(value.as_bytes()).map_err(DError::custom)?)
+                    }
+                }
+
+                deserializer.deserialize_str(GroupElemVisitor)
             }
         }
     };

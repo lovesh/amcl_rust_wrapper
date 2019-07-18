@@ -49,4 +49,13 @@ pub mod group_elem_g2;
 #[cfg(any(feature = "bls381", feature = "bn254"))]
 pub mod extension_field_gt;
 
+extern crate serde;
+
+#[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
+extern crate serde_json;
+
+
 // TODO: Move the timing tests to benchmark
