@@ -132,6 +132,13 @@ macro_rules! impl_group_elem_traits {
                 write!(f, "{}", c.tostring())
             }
         }
+
+        impl Drop for $group_element {
+            fn drop(&mut self) {
+                // x, y and z of ECP and ECP2 are private. So the only sensible way of zeroing them out seems setting them to infinity
+                self.value.inf()
+            }
+        }
     };
 }
 

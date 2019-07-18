@@ -1,3 +1,5 @@
+use clear_on_drop::clear::Clear;
+
 use crate::constants::{CurveOrder, GroupG2_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
