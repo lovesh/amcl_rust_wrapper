@@ -4,7 +4,7 @@ use crate::constants::{CurveOrder, GroupG1_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
-use crate::types::GroupG1;
+use crate::types::{GroupG1, FP};
 use crate::utils::hash_msg;
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
 
@@ -14,6 +14,7 @@ use std::slice::Iter;
 
 use serde::ser::{Error as SError, Serialize, Serializer};
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use std::str::{FromStr, SplitWhitespace};
 
 #[derive(Clone, Debug)]
 pub struct G1 {
@@ -102,7 +103,16 @@ impl GroupElement for G1 {
     }
 
     fn to_hex(&self) -> String {
-        self.to_ecp().tostring()
+        self.value.to_hex()
+    }
+
+    fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
+        //GroupG1::from_hex(s).into()
+        let mut iter = s.split_whitespace();
+        let x = parse_hex_as_FP(&mut iter)?;
+        let y = parse_hex_as_FP(&mut iter)?;
+        let z = parse_hex_as_FP(&mut iter)?;
+        Ok(GroupG1::new_from_fps(x, y, z).into())
     }
 
     fn negation(&self) -> Self {
@@ -133,7 +143,7 @@ impl_group_element_lookup_table!(G1, G1LookupTable);
 /// Represents an element of the sub-group of the elliptic curve over the prime field
 impl_optmz_scalar_mul_ops!(G1, GroupG1, G1LookupTable);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct G1Vector {
     elems: Vec<G1>,
 }
@@ -144,11 +154,46 @@ impl_group_elem_vec_product_ops!(G1, G1Vector, G1LookupTable);
 
 impl_group_elem_vec_conversions!(G1, G1Vector);
 
+/// Parse given hex string as FP
+pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError> {
+    // Logic almost copied from AMCL but with error handling and constant time execution.
+    // Constant time is important as hex is used during serialization and deserialization.
+    // A seemingly effortless solution is to filter string for errors and pad with 0s before
+    // passing to AMCL but that would be expensive as the string is scanned twice
+    let xes = match iter.next() {
+        Some(i) => {
+            // Parsing as u32 since xes cannot be negative
+            match u32::from_str(i) {
+                Ok(xes) => xes as i32,
+                Err(_) => return Err(SerzDeserzError::CannotParseFP)
+            }
+        }
+        None => return Err(SerzDeserzError::CannotParseFP)
+    };
+
+    let x = match iter.next() {
+        Some(i) => FieldElement::parse_hex_as_bignum(i.to_string())?,
+        None => return Err(SerzDeserzError::CannotParseFP)
+    };
+
+    Ok(FP::new_from_big_xes(x, xes))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn test_parse_hex_for_FP() {
+        // TODO:
+    }
+
+    #[test]
+    fn test_parse_bad_hex_for_FP() {
+        // TODO:
+    }
 
     #[test]
     fn test_binary_scalar_mul() {
@@ -173,7 +218,7 @@ mod test {
     }
 
     #[test]
-    fn test_NafLookupTable5() {
+    fn test_G1LookupTable() {
         let a = G1::random();
         let x = [1, 3, 5, 7, 9, 11, 13, 15];
         let table = G1LookupTable::from(&a);

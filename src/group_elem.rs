@@ -73,8 +73,13 @@ pub trait GroupElement: Clone + Sized {
 
     fn double_mut(&mut self);
 
-    /// Returns hex string
+    /// Returns hex string as a sequence of FPs separated by whitespace.
+    /// Each FP is itself a 2-tuple of strings separated by whitespace, 1st string is the excess and 2nd is a BigNum
     fn to_hex(&self) -> String;
+
+    /// Returns a group element by parsing the hex representation of itself. The hex
+    /// representation should match the one from `to_hex`
+    fn from_hex(s: String) -> Result<Self, SerzDeserzError>;
 
     /// Returns negation of this element
     fn negation(&self) -> Self;
@@ -146,7 +151,7 @@ macro_rules! impl_group_elem_traits {
                 where
                     S: Serializer,
             {
-                serializer.serialize_newtype_struct("$group_element", &self.to_bytes())
+                serializer.serialize_newtype_struct("$group_element", &self.to_hex())
             }
         }
 
@@ -168,7 +173,7 @@ macro_rules! impl_group_elem_traits {
                         where
                             E: DError,
                     {
-                        Ok($group_element::from_bytes(value.as_bytes()).map_err(DError::custom)?)
+                        Ok($group_element::from_hex(value.to_string()).map_err(DError::custom)?)
                     }
                 }
 
@@ -971,34 +976,76 @@ mod test {
         let count = 100;
         macro_rules! add_mul {
             ( $group:ident ) => {
-                {
-                    let points: Vec<_> = (0..100).map(|_| $group::random()).collect();
-                    let mut R = $group::random();
-                    let mut start = Instant::now();
-                    for i in 0..count {
-                        R = R + &points[i];
-                    }
-                    println!(
-                        "Addition time for {} elems = {:?}",
-                        count,
-                        start.elapsed()
-                    );
-
-                    let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
-                    start = Instant::now();
-                    for i in 0..count {
-                        &points[i] * &fs[i];
-                    }
-                    println!(
-                        "Scalar multiplication time for {} elems = {:?}",
-                        count,
-                        start.elapsed()
-                    );
+                let points: Vec<_> = (0..100).map(|_| $group::random()).collect();
+                let mut R = $group::random();
+                let mut start = Instant::now();
+                for i in 0..count {
+                    R = R + &points[i];
                 }
+                println!(
+                    "Addition time for {} elems = {:?}",
+                    count,
+                    start.elapsed()
+                );
+
+                let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
+                start = Instant::now();
+                for i in 0..count {
+                    &points[i] * &fs[i];
+                }
+                println!(
+                    "Scalar multiplication time for {} elems = {:?}",
+                    count,
+                    start.elapsed()
+                );
             };
         }
 
         add_mul!(G1);
         add_mul!(G2);
+    }
+
+    #[test]
+    fn test_hex_group_elem() {
+        macro_rules! hex {
+            ( $group:ident ) => {
+                for _ in 0..100 {
+                    let r = $group::random();
+                    let h = r.to_hex();
+                    let r_ = $group::from_hex(h).unwrap();
+                    assert_eq!(r, r_);
+                }
+            }
+        }
+        hex!(G1);
+        hex!(G2);
+    }
+
+    #[test]
+    fn test_serialization_deserialization_group_elem() {
+        macro_rules! serz {
+            ( $group:ident, $s_name:ident ) => {
+                #[derive(Serialize, Deserialize)]
+                struct $s_name {
+                    val: $group,
+                }
+
+                for _ in 0..100 {
+                    let r = $group::random();
+                    let s = $s_name {
+                        val: r.clone(),
+                    };
+
+                    let sz = serde_json::to_string(&s);
+
+                    let st = sz.unwrap();
+                    let g: $s_name = serde_json::from_str(&st).unwrap();
+                    assert_eq!(g.val, r)
+                }
+            }
+        }
+
+        serz!(G1, S1);
+        serz!(G2, S2);
     }
 }

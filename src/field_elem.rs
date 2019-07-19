@@ -2,7 +2,7 @@ use rand::{CryptoRng, RngCore};
 
 use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::types::{BigNum, DoubleBigNum};
+use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
 use amcl::rand::RAND;
 use std::cmp::Ordering;
@@ -15,6 +15,7 @@ use clear_on_drop::clear::Clear;
 
 use serde::ser::{Error as SError, Serialize, Serializer};
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use std::net::ToSocketAddrs;
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -389,15 +390,56 @@ impl FieldElement {
         (inverses, all_inv)
     }
 
-    /// Returns hex string
+    /// Returns hex string in big endian
     pub fn to_hex(&self) -> String {
-        self.to_bignum().tostring()
+        // TODO: Make constant time.
+        self.to_bignum().to_hex()
+    }
+
+    /// Create big number from hex string in big endian
+    pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
+        let mut f = Self::parse_hex_as_bignum(s)?;
+        f.rmod(&CurveOrder);
+        Ok(f.into())
     }
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
         let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
         barrett_reduction(&x, &CurveOrder, k, &u, &v)
+    }
+
+    /// Parse given hex string as BigNum in constant time.
+    pub fn parse_hex_as_bignum(val: String) -> Result<BigNum, SerzDeserzError> {
+        // Logic almost copied from AMCL but with error handling and constant time execution.
+        // Constant time is important as hex is used during serialization and deserialization.
+        // A seemingly effortless solution is to filter string for errors and pad with 0s before
+        // passing to AMCL but that would be expensive as the string is scanned twice
+
+        let mut val = val;
+        // Given hex cannot be bigger than max byte size
+        if val.len() > MODBYTES*2 {
+            return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
+                val.len(),
+                MODBYTES,
+            ));
+        }
+
+        // Pad the string for constant time parsing.
+        while val.len() < MODBYTES*2 {
+            val.insert(0, '0');
+        }
+
+        let mut res = BigNum::new();
+        for i in 0..val.len() {
+            match u8::from_str_radix(&val[i..i+1], 16) {
+                Ok(n) => res.w[0] += n as Limb,
+                Err(_) => return Err(SerzDeserzError::RequiredHexChar)
+            }
+            if i == (val.len()-1) {break}
+            res.shl(4);
+        }
+        return Ok(res);
     }
 }
 
@@ -406,7 +448,7 @@ impl Serialize for FieldElement {
         where
             S: Serializer,
     {
-        serializer.serialize_newtype_struct("FieldElement", &self.to_bytes())
+        serializer.serialize_newtype_struct("FieldElement", &self.to_hex())
     }
 }
 impl<'a> Deserialize<'a> for FieldElement {
@@ -427,7 +469,7 @@ impl<'a> Deserialize<'a> for FieldElement {
                 where
                     E: DError,
             {
-                Ok(FieldElement::from_bytes(value.as_bytes()).map_err(DError::custom)?)
+                Ok(FieldElement::from_hex(value.to_string()).map_err(DError::custom)?)
             }
         }
 
@@ -1240,23 +1282,63 @@ mod test {
     }
 
     #[test]
-    fn test_serialization_deserialization() {
+    fn test_parse_hex_as_bignum() {
+        for i in 0..100 {
+            let b = FieldElement::random().to_bignum();
+            let h = b.clone().to_hex();
+            let b1 = FieldElement::parse_hex_as_bignum(h.clone()).unwrap();
+            let b2 = BigNum::from_hex(h);
+            assert_eq!(b, b2);
+            assert_eq!(b, b1);
+        }
+    }
+
+    #[test]
+    fn test_parse_bad_hex_for_bignum() {
+        let r1 = FieldElement::random();
+        let mut h = r1.to_hex();
+        // Make hex string bigger
+        h.insert(0, '0');
+        assert!(h.len() > MODBYTES*2);
+        assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
+
+        let mut h = r1.to_hex();
+        // Add non hex character
+        h = h.replacen("0", "G", 1);
+        assert_eq!(h.len(), MODBYTES*2);
+        assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
+    }
+
+    #[test]
+    fn test_hex_field_elem() {
+        for _ in 0..1000 {
+            let r = FieldElement::random();
+            let h = r.to_hex();
+            let r_ = FieldElement::from_hex(h).unwrap();
+            assert_eq!(r, r_);
+        }
+
+    }
+
+    #[test]
+    fn test_serialization_deserialization_field_elem() {
         #[derive(Serialize, Deserialize)]
         struct Temp {
             val: FieldElement,
         }
-        let r = FieldElement::random();
-        let s = Temp {
-            val: r.clone(),
-        };
-        let serialized = serde_json::to_string(&s);
+        for _ in 0..100 {
+            let r = FieldElement::random();
+            let s = Temp {
+                val: r.clone(),
+            };
 
-        assert!(serialized.is_ok());
+            let serialized = serde_json::to_string(&s);
+            assert!(serialized.is_ok());
 
-        let f: Result<Temp, _> = serde_json::from_str(&serialized.unwrap());
-
-        assert!(f.is_ok());
-
-        assert_eq!(f.unwrap().val, r)
+            let j = serialized.unwrap();
+            let f: Result<Temp, _> = serde_json::from_str(&j);
+            assert!(f.is_ok());
+            assert_eq!(f.unwrap().val, r)
+        }
     }
 }

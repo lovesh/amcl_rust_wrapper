@@ -8,6 +8,7 @@ use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
 use amcl::sha3::{SHA3, SHAKE256};
+use crate::errors::SerzDeserzError;
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
