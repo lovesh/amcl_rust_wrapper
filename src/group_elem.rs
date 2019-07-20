@@ -812,40 +812,41 @@ mod test {
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
     use crate::group_elem_g1::G1;
+    use crate::constants::GroupG1_SIZE;
+    #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::group_elem_g2::G2;
-    use crate::constants::{GroupG1_SIZE, GroupG2_SIZE};
+    #[cfg(any(feature = "bls381", feature = "bn254"))]
+    use crate::constants::GroupG2_SIZE;
 
     #[test]
     fn test_to_and_from_bytes() {
+        let count = 100;
         macro_rules! to_and_fro_bytes {
             ( $group:ident, $group_size:ident ) => {
-                let x = $group::random();
-                let mut bytes: [u8; $group_size] = [0; $group_size];
-                bytes.copy_from_slice(x.to_bytes().as_slice());
-                let y = $group::from(&bytes);
-                assert_eq!(x, y);
+                for _ in 0..count {
+                    let x = $group::random();
+                    let mut bytes: [u8; $group_size] = [0; $group_size];
+                    bytes.copy_from_slice(x.to_bytes().as_slice());
+                    let y = $group::from(&bytes);
+                    assert_eq!(x, y);
 
-                let bytes1 = x.to_bytes();
-                assert_eq!(x, $group::from_bytes(bytes1.as_slice()).unwrap());
+                    let bytes1 = x.to_bytes();
+                    assert_eq!(x, $group::from_bytes(bytes1.as_slice()).unwrap());
 
-                // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
-                let mut bytes2 = bytes1.clone();
-                bytes2.push(0);
-                assert!($group::from_bytes(bytes2.as_slice()).is_err());
+                    // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
+                    let mut bytes2 = bytes1.clone();
+                    bytes2.push(0);
+                    assert!($group::from_bytes(bytes2.as_slice()).is_err());
 
-                // Decrease length of byte vector
-                assert!($group::from_bytes(&bytes1[0..$group_size - 1]).is_err());
+                    // Decrease length of byte vector
+                    assert!($group::from_bytes(&bytes1[0..$group_size - 1]).is_err());
+                }
             };
         }
 
-        let count = 100;
-        for _ in 0..count {
-            to_and_fro_bytes!(G1, GroupG1_SIZE);
-        }
-
-        for _ in 0..count {
-            to_and_fro_bytes!(G2, GroupG2_SIZE);
-        }
+        to_and_fro_bytes!(G1, GroupG1_SIZE);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        to_and_fro_bytes!(G2, GroupG2_SIZE);
     }
 
     #[test]
@@ -863,6 +864,7 @@ mod test {
         }
 
         hashing!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         hashing!(G2);
     }
 
@@ -881,6 +883,7 @@ mod test {
             };
         }
         negating!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         negating!(G2);
     }
 
@@ -888,7 +891,7 @@ mod test {
     fn test_scalar_mult_operators() {
         macro_rules! scalar_mult {
             ( $group:ident ) => {
-                {
+                for _ in 0..10 {
                     let g = $group::random();
                     let f = FieldElement::random();
                     let m = g.scalar_mul_const_time(&f);
@@ -899,12 +902,9 @@ mod test {
             };
         }
 
-        for _ in 0..10 {
-            scalar_mult!(G1)
-        }
-        for _ in 0..10 {
-            scalar_mult!(G2)
-        }
+        scalar_mult!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        scalar_mult!(G2)
     }
 
     #[test]
@@ -927,6 +927,7 @@ mod test {
             };
         }
         addition!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         addition!(G2);
     }
 
@@ -934,7 +935,7 @@ mod test {
     fn test_negation() {
         macro_rules! neg {
             ( $group:ident ) => {
-                {
+                for i in 0..10 {
                     let a = G1::random();
                     let b = a.negation();
                     assert!((a + b).is_identity())
@@ -942,10 +943,9 @@ mod test {
             };
         }
 
-        for i in 0..10 {
-            neg!(G1);
-            neg!(G2);
-        }
+        neg!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        neg!(G2);
     }
 
     #[test]
@@ -968,6 +968,7 @@ mod test {
             };
         }
         order_check!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         order_check!(G2);
     }
 
@@ -1002,6 +1003,7 @@ mod test {
         }
 
         add_mul!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         add_mul!(G2);
     }
 
@@ -1018,6 +1020,7 @@ mod test {
             }
         }
         hex!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         hex!(G2);
     }
 
@@ -1046,6 +1049,7 @@ mod test {
         }
 
         serz!(G1, S1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
         serz!(G2, S2);
     }
 }

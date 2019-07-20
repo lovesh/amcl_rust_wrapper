@@ -9,7 +9,7 @@ exclude = [
 ]
 
 [features]
-default = []
+default = ["bls381"]
 bls381 = []
 bn254 = []
 secp256k1 = []
