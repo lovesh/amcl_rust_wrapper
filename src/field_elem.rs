@@ -2,7 +2,7 @@ use rand::{CryptoRng, RngCore};
 
 use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::types::{BigNum, DoubleBigNum};
+use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
 use amcl::rand::RAND;
 use std::cmp::Ordering;
@@ -10,6 +10,12 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
+
+use clear_on_drop::clear::Clear;
+
+use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use std::net::ToSocketAddrs;
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -24,7 +30,7 @@ macro_rules! add_field_elems {
     };
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct FieldElement {
     value: BigNum,
 }
@@ -38,6 +44,16 @@ impl fmt::Display for FieldElement {
 impl Hash for FieldElement {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.to_bytes())
+    }
+}
+
+impl Default for FieldElement {
+    fn default() -> Self { Self::new() }
+}
+
+impl Drop for FieldElement {
+    fn drop(&mut self) {
+        self.value.w.clear();
     }
 }
 
@@ -86,6 +102,7 @@ impl FieldElement {
         BigNum::isunity(&self.value)
     }
 
+    /// Return bytes in MSB form
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut temp = BigNum::new_copy(&self.value);
         let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
@@ -93,6 +110,7 @@ impl FieldElement {
         bytes.to_vec()
     }
 
+    /// Expects bytes in MSB form
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != MODBYTES {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
@@ -354,17 +372,17 @@ impl FieldElement {
         // Construct c as [elems[0], elems[0]*elems[1], elems[0]*elems[1]*elems[2], .... elems[0]*elems[1]*elems[2]*...elems[k-1]]
         let mut c: Vec<Self> = vec![elems[0].clone()];
         for i in 1..k {
-            c.push(c[i - 1] * elems[i])
+            c.push(&c[i - 1] * &elems[i])
         }
 
         // u = 1 / elems[0]*elems[1]*elems[2]*...elems[k-1]
         let all_inv = c[k - 1].inverse();
-        let mut u = all_inv;
+        let mut u = all_inv.clone();
         let mut inverses = vec![FieldElement::one(); k];
 
         for i in (1..k).rev() {
-            inverses[i] = u * c[i - 1];
-            u = u * elems[i];
+            inverses[i] = &u * &c[i - 1];
+            u = &u * &elems[i];
         }
 
         inverses[0] = u;
@@ -372,15 +390,90 @@ impl FieldElement {
         (inverses, all_inv)
     }
 
-    /// Returns hex string
+    /// Returns hex string in big endian
     pub fn to_hex(&self) -> String {
-        self.to_bignum().tostring()
+        // TODO: Make constant time.
+        self.to_bignum().to_hex()
+    }
+
+    /// Create big number from hex string in big endian
+    pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
+        let mut f = Self::parse_hex_as_bignum(s)?;
+        f.rmod(&CurveOrder);
+        Ok(f.into())
     }
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
         let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
         barrett_reduction(&x, &CurveOrder, k, &u, &v)
+    }
+
+    /// Parse given hex string as BigNum in constant time.
+    pub fn parse_hex_as_bignum(val: String) -> Result<BigNum, SerzDeserzError> {
+        // Logic almost copied from AMCL but with error handling and constant time execution.
+        // Constant time is important as hex is used during serialization and deserialization.
+        // A seemingly effortless solution is to filter string for errors and pad with 0s before
+        // passing to AMCL but that would be expensive as the string is scanned twice
+
+        let mut val = val;
+        // Given hex cannot be bigger than max byte size
+        if val.len() > MODBYTES*2 {
+            return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
+                val.len(),
+                MODBYTES,
+            ));
+        }
+
+        // Pad the string for constant time parsing.
+        while val.len() < MODBYTES*2 {
+            val.insert(0, '0');
+        }
+
+        let mut res = BigNum::new();
+        for i in 0..val.len() {
+            match u8::from_str_radix(&val[i..i+1], 16) {
+                Ok(n) => res.w[0] += n as Limb,
+                Err(_) => return Err(SerzDeserzError::RequiredHexChar)
+            }
+            if i == (val.len()-1) {break}
+            res.shl(4);
+        }
+        return Ok(res);
+    }
+}
+
+impl Serialize for FieldElement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
+        serializer.serialize_newtype_struct("FieldElement", &self.to_hex())
+    }
+}
+impl<'a> Deserialize<'a> for FieldElement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'a>,
+    {
+        struct FieldElementVisitor;
+
+        impl<'a> Visitor<'a> for FieldElementVisitor {
+            type Value = FieldElement;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("expected FieldElement")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<FieldElement, E>
+                where
+                    E: DError,
+            {
+                Ok(FieldElement::from_hex(value.to_string()).map_err(DError::custom)?)
+            }
+        }
+
+        deserializer.deserialize_str(FieldElementVisitor)
     }
 }
 
@@ -490,6 +583,12 @@ impl AddAssign for FieldElement {
     }
 }
 
+impl<'a> AddAssign<&'a FieldElement> for FieldElement {
+    fn add_assign(&mut self, other: &'a FieldElement) {
+        self.add_assign_(other)
+    }
+}
+
 impl Sub for FieldElement {
     type Output = Self;
 
@@ -525,6 +624,12 @@ impl<'a> Sub<&'a FieldElement> for &FieldElement {
 impl SubAssign for FieldElement {
     fn sub_assign(&mut self, other: Self) {
         self.sub_assign_(&other)
+    }
+}
+
+impl<'a> SubAssign<&'a FieldElement> for FieldElement {
+    fn sub_assign(&mut self, other: &'a Self) {
+        self.sub_assign_(other)
     }
 }
 
@@ -650,7 +755,7 @@ impl FieldElementVector {
     pub fn scaled_by(&self, n: &FieldElement) -> Self {
         let mut scaled = Vec::<FieldElement>::with_capacity(self.len());
         for i in 0..self.len() {
-            scaled.push(self[i] * n)
+            scaled.push(&self[i] * n)
         }
         scaled.into()
     }
@@ -660,7 +765,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            sum_vector.push(self[i] + b.elems[i])
+            sum_vector.push(&self[i] + &b.elems[i])
         }
         Ok(sum_vector)
     }
@@ -670,7 +775,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            diff_vector.push(self[i] - b[i])
+            diff_vector.push(&self[i] - &b[i])
         }
         Ok(diff_vector)
     }
@@ -679,7 +784,7 @@ impl FieldElementVector {
     pub fn sum(&self) -> FieldElement {
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
-            accum += self[i];
+            accum += &self[i];
         }
         accum
     }
@@ -690,7 +795,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
-            accum += self[i] * b[i];
+            accum += &self[i] * &b[i];
         }
         Ok(accum)
     }
@@ -705,7 +810,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut hadamard_product = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            hadamard_product.push(self[i] * b[i]);
+            hadamard_product.push(&self[i] * &b[i]);
         }
         Ok(hadamard_product)
     }
@@ -780,7 +885,7 @@ pub fn multiply_row_vector_with_matrix(
     let mut out = FieldElementVector::new(out_len);
     for i in 0..out_len {
         for j in 0..vector.len() {
-            out[i] += vector[j] * matrix[j][i];
+            out[i] += &vector[j] * &matrix[j][i];
         }
     }
     Ok(out)
@@ -792,6 +897,7 @@ mod test {
     use amcl::bls381::big::BIG;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+    use serde_json;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -952,9 +1058,9 @@ mod test {
     #[test]
     fn test_negating_field_elems() {
         let b = FieldElement::random();
-        let neg_b = -b;
+        let neg_b = -&b;
         assert_ne!(b, neg_b);
-        let neg_neg_b = -neg_b;
+        let neg_neg_b = -&neg_b;
         assert_eq!(b, neg_neg_b);
         assert_eq!(b + neg_b, FieldElement::zero());
     }
@@ -965,12 +1071,12 @@ mod test {
         let b = FieldElement::random();
         let c = FieldElement::random();
 
-        let sum = a + b + c;
+        let sum = &a + &b + &c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
         expected_sum = expected_sum.plus(&b);
-        expected_sum += c;
+        expected_sum += &c;
         assert_eq!(sum, expected_sum);
     }
 
@@ -980,12 +1086,12 @@ mod test {
         let b = FieldElement::random();
         let c = FieldElement::random();
 
-        let sum = a - b - c;
+        let sum = &a - &b - &c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
-        expected_sum = expected_sum - b;
-        expected_sum -= c;
+        expected_sum = expected_sum - &b;
+        expected_sum -= &c;
         assert_eq!(sum, expected_sum);
     }
 
@@ -1097,7 +1203,7 @@ mod test {
         let mut expected_inv_product = FieldElement::one();
         for i in 0..count {
             assert_eq!(inverses[i], inverses_1[i]);
-            expected_inv_product = expected_inv_product * inverses[i];
+            expected_inv_product = expected_inv_product * &inverses[i];
         }
 
         assert_eq!(expected_inv_product, all_inv);
@@ -1110,7 +1216,7 @@ mod test {
         let mut R = FieldElement::random();
         let start = Instant::now();
         for i in 0..count {
-            R = R + points[i];
+            R = &R + &points[i];
         }
         println!("Addition time for {} elems = {:?}", count, start.elapsed());
     }
@@ -1173,5 +1279,66 @@ mod test {
         println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
 
         assert_eq!(BigNum::comp(&x, &y), 0);
+    }
+
+    #[test]
+    fn test_parse_hex_as_bignum() {
+        for i in 0..100 {
+            let b = FieldElement::random().to_bignum();
+            let h = b.clone().to_hex();
+            let b1 = FieldElement::parse_hex_as_bignum(h.clone()).unwrap();
+            let b2 = BigNum::from_hex(h);
+            assert_eq!(b, b2);
+            assert_eq!(b, b1);
+        }
+    }
+
+    #[test]
+    fn test_parse_bad_hex_for_bignum() {
+        let r1 = FieldElement::random();
+        let mut h = r1.to_hex();
+        // Make hex string bigger
+        h.insert(0, '0');
+        assert!(h.len() > MODBYTES*2);
+        assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
+
+        let mut h = r1.to_hex();
+        // Add non hex character
+        h = h.replacen("0", "G", 1);
+        assert_eq!(h.len(), MODBYTES*2);
+        assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
+    }
+
+    #[test]
+    fn test_hex_field_elem() {
+        for _ in 0..1000 {
+            let r = FieldElement::random();
+            let h = r.to_hex();
+            let r_ = FieldElement::from_hex(h).unwrap();
+            assert_eq!(r, r_);
+        }
+
+    }
+
+    #[test]
+    fn test_serialization_deserialization_field_elem() {
+        #[derive(Serialize, Deserialize)]
+        struct Temp {
+            val: FieldElement,
+        }
+        for _ in 0..100 {
+            let r = FieldElement::random();
+            let s = Temp {
+                val: r.clone(),
+            };
+
+            let serialized = serde_json::to_string(&s);
+            assert!(serialized.is_ok());
+
+            let j = serialized.unwrap();
+            let f: Result<Temp, _> = serde_json::from_str(&j);
+            assert!(f.is_ok());
+            assert_eq!(f.unwrap().val, r)
+        }
     }
 }

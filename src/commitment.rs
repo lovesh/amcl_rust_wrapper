@@ -26,12 +26,12 @@ pub fn commit_to_field_element_vectors(
     let mut combined_g: Vec<G1> = vec![];
     combined_g.extend_from_slice(g.as_slice());
     combined_g.extend_from_slice(h.as_slice());
-    combined_g.push(*u);
+    combined_g.push(u.clone());
 
     let mut combined_f: Vec<FieldElement> = vec![];
     combined_f.extend_from_slice(a.as_slice());
     combined_f.extend_from_slice(b.as_slice());
-    combined_f.push(*c);
+    combined_f.push(c.clone());
 
     G1Vector::from(combined_g).inner_product_const_time(&FieldElementVector::from(combined_f))
 }

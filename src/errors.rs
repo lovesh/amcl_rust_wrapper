@@ -1,4 +1,5 @@
 use super::types::BigNum;
+use core::fmt;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ValueError {
@@ -14,6 +15,20 @@ pub enum SerzDeserzError {
     FieldElementBytesIncorrectSize(usize, usize),
     G1BytesIncorrectSize(usize, usize),
     G2BytesIncorrectSize(usize, usize),
+    RequiredHexChar,
+    CannotParseFP,
+}
+
+impl fmt::Display for SerzDeserzError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SerzDeserzError::FieldElementBytesIncorrectSize(a, b) => write!(f, "Incorrect bytes size for field element"),
+            SerzDeserzError::G1BytesIncorrectSize(a, b) => write!(f, "Incorrect bytes size for G1 group element"),
+            SerzDeserzError::G2BytesIncorrectSize(a, b) => write!(f, "Incorrect bytes size for G2 group element"),
+            SerzDeserzError::RequiredHexChar => write!(f, "Required hex character"),
+            SerzDeserzError::CannotParseFP => write!(f, "Error while parsing FP"),
+        }
+    }
 }
 
 #[macro_export]
