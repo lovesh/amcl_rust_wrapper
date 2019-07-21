@@ -1,8 +1,11 @@
 language: rust
 rust:
   - stable
+branches:
+  only:
+    - master
 script:
-  - cargo test --release --features bls381
-  - cargo test --release --features bn254
-  - cargo test --release --features secp256k1
-  - cargo test --release --features ed25519
+  - cargo test --release --no-default-features --features bls381
+  - cargo test --release --no-default-features --features bn254
+  - cargo test --release --no-default-features --features secp256k1
+  - cargo test --release --no-default-features --features ed25519

@@ -2,25 +2,27 @@
 
 - Wraps some parts of [AMCL](https://github.com/miracl/amcl) to provide a nice abstraction to work with finite field elements and group elements when working with elliptic curves.   
 - Overloads +, -, *, +=, -= to use with field as well as group elements.  The overloaded operators correspond to constant time methods. But for scalar multiplication, variable time algorithms are present but can be used by calling methods only. 
-- Provides abstraction for creating vectors of field elements or group elements and then scale, add, subtract, take inner product or Hadamard product.   
+- Provides abstraction for creating vectors of field elements or group elements and then scale, add, subtract, take inner product or Hadamard product.
+- Serialization support using [serde](https://github.com/serde-rs/json).
+- Field and group elements are cleared when dropped. Using [clear_on_drop](https://github.com/cesarb/clear_on_drop).     
 - Additionally, implements some extra algorithms like variable time scalar multiplication using wNAF, constant time and variable time multi-scalar multiplication, batch (simultaneous) inversion and Barrett reduction.
 
 ## Building
 The wrapper has to be built by enabling any one of the mentioned curve as a feature.   
-To build for BLS-381 curve, use
+To build for BLS-381 curve, use (BLS381 is the default curve so not using `--no-default-features` is fine)
 
 ```
-cargo build --features bls381
+cargo build --no-default-features --features bls381
 ```
 
 Similarly, to build for secp256k1, use
 ```
-cargo build --features secp256k1
+cargo build --no-default-features --features secp256k1
 ```
 
 To run tests for secp256k1, use
 ```
-cargo test --features secp256k1
+cargo test --no-default-features --features secp256k1
 ```
 
 To use it as dependency crate, add the name of the curve as a feature. Something like this
@@ -50,6 +52,10 @@ let e = a * b;
 let mut sum = FieldElement::zero();
 sum += c;
 sum += d;
+
+// Convert to and from hex.
+let hex_repr = a.to_hex();
+let a_recon = FieldElement::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
 
 ```
@@ -80,6 +86,10 @@ let z1 = x - y;
 let mut sum_1 = G1::identity();
 sum_1 += z;
 sum_1 += z1;
+
+// Convert to and from hex.
+let hex_repr = x.to_hex();
+let x_recon = G1::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
 
 ```
@@ -103,6 +113,10 @@ let x = G1::random();
 assert!(x.has_correct_order());
 let y = G2::random();
 assert!(y.has_correct_order());
+
+// Convert to and from hex.
+let hex_repr = x.to_hex();
+let x_recon = G2::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
 
 Mutating versions of the above operations like addition/subtraction/negation/inversion are present but have to be called as methods like `b.negate()`
