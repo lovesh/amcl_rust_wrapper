@@ -28,7 +28,7 @@ serde_derive = "1.0"
 #branch = "master"
 #rev = "f39c8b9fa77f706362d8503ff7e077f547b86705"
 package = "miracl_amcl"
-version = "3.2.4"
+version = "3.2.5"
 features = ["bls381", "bn254", "secp256k1", "ed25519"]
 
 [dependencies.clear_on_drop]

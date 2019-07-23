@@ -53,7 +53,7 @@ impl GT {
     /// Reduced ate multi pairing. Takes a vector of tuples of group elements G1 and G2 as Vec<(&G1, &G2)>.
     /// Returns the product of their pairings.
     /// More efficient than using ate_pairing or ate_2_pairing and multiplying results
-    pub fn ate_mutli_pairing(elems: Vec<(&G1, &G2)>) -> Self {
+    pub fn ate_multi_pairing(elems: Vec<(&G1, &G2)>) -> Self {
         let mut accum = initmp();
         for (g1, g2) in elems {
             if g1.is_identity() || g2.is_identity() {
@@ -169,26 +169,26 @@ mod test {
 
         // multi-pairing
         assert!(
-            GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &h2), (&g1_identity, &k2)])
-                == GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &h2)]),
+            GT::ate_multi_pairing(vec![(&g1, &g2), (&h1, &h2), (&g1_identity, &k2)])
+                == GT::ate_multi_pairing(vec![(&g1, &g2), (&h1, &h2)]),
         );
 
         assert!(
-            GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &h2), (&k1, &g2_identity)])
-                == GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &h2)]),
+            GT::ate_multi_pairing(vec![(&g1, &g2), (&h1, &h2), (&k1, &g2_identity)])
+                == GT::ate_multi_pairing(vec![(&g1, &g2), (&h1, &h2)]),
         );
 
         assert!(
-            GT::ate_mutli_pairing(vec![(&g1, &g2), (&g1_identity, &h2), (&k1, &k2)])
-                == GT::ate_mutli_pairing(vec![(&g1, &g2), (&k1, &k2)]),
+            GT::ate_multi_pairing(vec![(&g1, &g2), (&g1_identity, &h2), (&k1, &k2)])
+                == GT::ate_multi_pairing(vec![(&g1, &g2), (&k1, &k2)]),
         );
 
         assert!(
-            GT::ate_mutli_pairing(vec![(&g1, &g2), (&g1_identity, &h2), (&k1, &k2)])
-                == GT::ate_mutli_pairing(vec![(&g1, &g2), (&k1, &k2)]),
+            GT::ate_multi_pairing(vec![(&g1, &g2), (&g1_identity, &h2), (&k1, &k2)])
+                == GT::ate_multi_pairing(vec![(&g1, &g2), (&k1, &k2)]),
         );
 
-        assert!(GT::ate_mutli_pairing(vec![(&g1_identity, &g2_identity),
+        assert!(GT::ate_multi_pairing(vec![(&g1_identity, &g2_identity),
                                            (&g1_identity, &g2_identity),
                                            (&g1_identity, &g2_identity)]).is_one());
     }
@@ -225,7 +225,7 @@ mod test {
         let lhs = GT::ate_pairing(&(&g1 + &h1), &g2);
         let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&h1, &g2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &h1, &g2);
-        let rhs_2 = GT::ate_mutli_pairing(vec![(&g1, &g2), (&h1, &g2)]);
+        let rhs_2 = GT::ate_multi_pairing(vec![(&g1, &g2), (&h1, &g2)]);
         assert!(lhs == rhs);
         assert!(rhs_1 == rhs);
         assert!(rhs_2 == rhs);
@@ -234,7 +234,7 @@ mod test {
         let lhs = GT::ate_pairing(&g1, &(&g2 + &h2));
         let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&g1, &h2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &g1, &h2);
-        let rhs_2 = GT::ate_mutli_pairing(vec![(&g1, &g2), (&g1, &h2)]);
+        let rhs_2 = GT::ate_multi_pairing(vec![(&g1, &g2), (&g1, &h2)]);
         assert!(lhs == rhs);
         assert!(rhs_1 == rhs);
         assert!(rhs_2 == rhs);
@@ -271,7 +271,7 @@ mod test {
         );
 
         let start = Instant::now();
-        let accum_multi = GT::ate_mutli_pairing(tuple_vec);
+        let accum_multi = GT::ate_multi_pairing(tuple_vec);
         println!(
             "Time to compute {} pairings using multi-pairings is {:?}",
             count,

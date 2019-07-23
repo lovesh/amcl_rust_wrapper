@@ -34,10 +34,18 @@ features = ["bls381"]
 ```
 
 Note that only one curve can be used at a time so the code only works with one feature.
- 
+
+## Benchmarking
+There are tests for various operations which print the time taken to do those ops. They are prefixed with `timing`*[]: 
+To run them use
+
+```
+cargo test --release --no-default-features --features <curve name> -- --nocapture timing
+```
+
 ## Examples
 1. Create some random field elements or group elements and do some basic additions/subtraction/multiplication 
-```
+```rust
 let a = FieldElement::random();
 let b = FieldElement::random();
 let neg_b = -b;
@@ -52,13 +60,9 @@ let e = a * b;
 let mut sum = FieldElement::zero();
 sum += c;
 sum += d;
-
-// Convert to and from hex.
-let hex_repr = a.to_hex();
-let a_recon = FieldElement::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
 
-```
+```rust
 // Compute inverse of element
 let n = a.invert();
 
@@ -66,12 +70,12 @@ let n = a.invert();
 let (inverses, pr) = FieldElement::batch_invert(vec![a, b, c, d].as_slice());  
 ```
 
-```
+```rust
 // Compute a width 5 NAF.
 let a_wnaf = a.to_wnaf(5);
 ```
 
-```
+```rust
 // G1 is the elliptic curve sub-group over the prime field
 let x = G1::random();
 let y = G1::random();
@@ -86,13 +90,9 @@ let z1 = x - y;
 let mut sum_1 = G1::identity();
 sum_1 += z;
 sum_1 += z1;
-
-// Convert to and from hex.
-let hex_repr = x.to_hex();
-let x_recon = G1::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
 
-```
+```rust
 // G2 is the elliptic curve sub-group over the prime extension field
 let x = G2::random();
 let y = G2::random();
@@ -113,16 +113,12 @@ let x = G1::random();
 assert!(x.has_correct_order());
 let y = G2::random();
 assert!(y.has_correct_order());
-
-// Convert to and from hex.
-let hex_repr = x.to_hex();
-let x_recon = G2::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
 
 Mutating versions of the above operations like addition/subtraction/negation/inversion are present but have to be called as methods like `b.negate()`
 
 2. Scalar multiplication
-```
+```rust
 let a = FieldElement::random();
 let g = G1::generator();  // the group's generator
 // constant time scalar multiplication
@@ -139,7 +135,7 @@ let b = G1::from_msg_hash(msg.as_bytes());
 ```
 
 4. Create vectors of field elements and do some operations
-```
+```rust
 // creates a vector of size 10 with all elements as 0
 let mut a = FieldElementVector::new(10);
 // Add 2 more elements to the above vector
@@ -153,13 +149,13 @@ a.len();    // length of vector
 a.sum();    // sum of elements of vector 
 ```
 
-```
+```rust
 // Return a Vandermonde vector of a given field element, i.e. given element `k` and size `n`, return vector as `vec![1, k, k^2, k^3, ... k^n-1]`
 let k = FieldElement::random();  
 let van_vec = FieldElementVector::new_vandermonde_vector(&k, 5);
 ```
 
-```
+```rust
 // creates a vector of size 10 with randomly generated field elements
 let rands: Vec<_> = (0..10).map(|_| FieldElement::random()).collect();
 
@@ -167,7 +163,7 @@ let rands: Vec<_> = (0..10).map(|_| FieldElement::random()).collect();
 let rands_1 = FieldElementVector::random(10);
 ```
 
-```
+```rust
 // Compute new vector as sum of 2 vectors. Requires vectors to be of equal length. 
 let sum_vec = rands.plus(&rands_1);
 // Compute new vector as difference of 2 vectors. Requires vectors to be of equal length.
@@ -180,7 +176,7 @@ let mut rands_2 = rands_1.clone();
 rands_2.scale(&n);
 ```
 
-```
+```rust
 // Compute inner product of 2 vectors. Requires vectors to be of equal length.
 let ip = rands.inner_product(&rands_1);
 
@@ -189,7 +185,7 @@ let hp = rands.hadamard_product(&rands_1);
 ```
 
 5. Create vectors of group elements and do some operations
-```
+```rust
 // creates a vector of size 10 with all elements as 0
 let mut a = G1Vector::new(10);
 // Add 2 more elements to the above vector
@@ -206,7 +202,7 @@ let sum_vec = rands.plus(&rands_1);
 let diff_vec = rands.minus(&rands_1);
 ```
 
-```
+```rust
 // Compute inner product of a vector of group elements with a vector of field elements.    
 // eg. given a vector of group elements and field elements, G and F respectively, compute G[0]*F[0] + G[1]*F[1] + G[2]*F[2] + .. G[n-1]*F[n-1]   
 // requires vectors to be of same length
@@ -223,7 +219,7 @@ let ip1 = g.inner_product_var_time(&f);
 ```
 
 5. Pairing support. Ate pairing is supported with target group `GT`  
-```
+```rust
 let g1 = G1::random();
 let g2 = G2::random();
 // compute reduced ate pairing for 2 elements, i.e. e(g1, g2)
@@ -239,9 +235,24 @@ let m = GT::mul(&gt, &ht);
 let p = GT::ate_2_pairing(&g1, &g2, &h1, &h2);
 
 // compute reduced ate multi-pairing. Takes a vector of tuples of group elements G1 and G2 as Vec<(&G1, &G2)>
-let e = GT::ate_mutli_pairing(tuple_vec);
+let e = GT::ate_multi_pairing(tuple_vec);
 
 // Raise target group element to field element (GT^f)
 let r = FieldElement::random();
 let p = gt.pow(&r);
+```
+
+6. Serialization
+```rust
+// Convert to and from hex.
+let hex_repr = a.to_hex();
+let a_recon = FieldElement::from_hex(hex_repr).unwrap();    // Constant time conversion
+
+// Convert to and from hex.
+let hex_repr = x.to_hex();
+let x_recon = G1::from_hex(hex_repr).unwrap();    // Constant time conversion
+
+// Convert to and from hex.
+let hex_repr = y.to_hex();
+let y_recon = G2::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```

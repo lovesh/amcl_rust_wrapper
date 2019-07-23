@@ -108,12 +108,15 @@ impl GroupElement for G2 {
     }
 
     fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
-        //GroupG2::from_hex(s).into()
         let mut iter = s.split_whitespace();
         let x = parse_hex_as_FP2(&mut iter)?;
         let y = parse_hex_as_FP2(&mut iter)?;
         let z = parse_hex_as_FP2(&mut iter)?;
-        Ok(GroupG2::new_from_fp2s(x, y, z).into())
+        let mut value = GroupG2::new();
+        value.setpx(x);
+        value.setpy(y);
+        value.setpz(z);
+        Ok(G2 { value })
     }
 
     fn negation(&self) -> Self {
@@ -139,7 +142,10 @@ pub fn parse_hex_as_FP2(iter: &mut SplitWhitespace) -> Result<FP2, SerzDeserzErr
     // passing to AMCL but that would be expensive as the string is scanned twice
     let a = parse_hex_as_FP(iter)?;
     let b = parse_hex_as_FP(iter)?;
-    Ok(FP2::new_from_fp2(a, b))
+    let mut fp2 = FP2::new();
+    fp2.seta(a);
+    fp2.setb(b);
+    Ok(fp2)
 }
 
 /// Represents an element of the sub-group of the elliptic curve over the prime extension field

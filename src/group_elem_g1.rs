@@ -107,12 +107,15 @@ impl GroupElement for G1 {
     }
 
     fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
-        //GroupG1::from_hex(s).into()
         let mut iter = s.split_whitespace();
         let x = parse_hex_as_FP(&mut iter)?;
         let y = parse_hex_as_FP(&mut iter)?;
         let z = parse_hex_as_FP(&mut iter)?;
-        Ok(GroupG1::new_from_fps(x, y, z).into())
+        let mut value = GroupG1::new();
+        value.setpx(x);
+        value.setpy(y);
+        value.setpz(z);
+        Ok(G1 { value })
     }
 
     fn negation(&self) -> Self {
@@ -176,7 +179,7 @@ pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
         None => return Err(SerzDeserzError::CannotParseFP)
     };
 
-    Ok(FP::new_from_big_xes(x, xes))
+    Ok(FP { x, xes })
 }
 
 #[cfg(test)]
