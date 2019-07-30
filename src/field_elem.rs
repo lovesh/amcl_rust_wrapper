@@ -15,7 +15,6 @@ use clear_on_drop::clear::Clear;
 
 use serde::ser::{Error as SError, Serialize, Serializer};
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use std::net::ToSocketAddrs;
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -698,17 +697,17 @@ impl FieldElementVector {
     /// FieldElementVector::new_vandermonde_vector(k, n) => vec![1, k, k^2, k^3, ... k^n-1]
     /// FieldElementVector::new_vandermonde_vector(0, n) => vec![0, 0, ... n times]
     pub fn new_vandermonde_vector(elem: &FieldElement, size: usize) -> Self {
-        if elem.is_zero() {
+        if size == 0 {
+            Self::new(0)
+        } else if elem.is_zero() {
             Self::new(size)
         } else if elem.is_one() {
             vec![FieldElement::one(); size].into()
         } else {
             let mut v = Vec::<FieldElement>::with_capacity(size);
             v.push(FieldElement::one());
-            let mut current = elem.clone();
-            for _ in 1..size {
-                v.push(current.clone());
-                current = current * elem;
+            for i in 1..size {
+                v.push(&v[i-1] * elem);
             }
             v.into()
         }
@@ -1279,6 +1278,44 @@ mod test {
         println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
 
         assert_eq!(BigNum::comp(&x, &y), 0);
+    }
+
+    #[test]
+    fn timing_field_elem_squaring() {
+        let count = 1000;
+        let fs: Vec<FieldElement> = (0..count)
+            .map(|_| FieldElement::random())
+            .collect();
+        let nums: Vec<BigNum> = fs.iter().map(|f|f.to_bignum()).collect();
+        let mut r1 = vec![];
+        let mut r2 = vec![];
+
+        let start = Instant::now();
+        for i in 0..count {
+            r1.push(&fs[i] * &fs[i])
+        }
+        println!("Mul time for {} elems = {:?}", count, start.elapsed());
+
+        let start = Instant::now();
+        for i in 0..count {
+            r2.push(fs[i].square())
+        }
+        println!("Square time for {} elems = {:?}", count, start.elapsed());
+        for i in 0..count {
+            assert!(r1[i] == r2[i])
+        }
+
+        let start = Instant::now();
+        for i in 0..count {
+            BigNum::modmul(&nums[i], &nums[i], &CurveOrder);
+        }
+        println!("Mul time for {} big nums = {:?}", count, start.elapsed());
+
+        let start = Instant::now();
+        for i in 0..count {
+            BigNum::modsqr(&nums[i], &CurveOrder);
+        }
+        println!("Sqr time for {} big nums = {:?}", count, start.elapsed());
     }
 
     #[test]
