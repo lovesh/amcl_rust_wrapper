@@ -133,6 +133,16 @@ impl GroupElement for G1 {
     }
 }
 
+impl G1 {
+    /// Computes sum of 2 scalar multiplications.
+    /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
+    /// returns self*a + h*b
+    pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
+        self.value.mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum()).into()
+    }
+}
+
+
 impl_group_elem_traits!(G1);
 
 impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
@@ -217,67 +227,6 @@ mod test {
             for i in 1..=17 {
                 assert_eq!(mults[i - 1], (&a * FieldElement::from(i as u8)));
             }
-        }
-    }
-
-    #[test]
-    fn test_G1LookupTable() {
-        let a = G1::random();
-        let x = [1, 3, 5, 7, 9, 11, 13, 15];
-        let table = G1LookupTable::from(&a);
-        for i in x.iter() {
-            let f = FieldElement::from(*i as u8);
-            let expected = &a * f;
-            assert_eq!(expected, *table.select(*i as usize));
-        }
-    }
-
-    #[test]
-    fn test_wnaf_mul() {
-        for _ in 0..100 {
-            let a = G1::random();
-            let r = FieldElement::random();
-            let expected = &a * &r;
-
-            let table = G1LookupTable::from(&a);
-            let wnaf = r.to_wnaf(5);
-            let p = G1::wnaf_mul(&table, &wnaf);
-
-            assert_eq!(expected, p);
-        }
-    }
-
-    #[test]
-    fn test_multi_scalar_multiplication() {
-        for _ in 0..5 {
-            let mut fs = vec![];
-            let mut gs = vec![];
-            let gen: G1 = G1::generator();
-
-            for i in 0..70 {
-                fs.push(FieldElement::random());
-                gs.push(gen.scalar_mul_const_time(&fs[i]));
-            }
-
-            let gv = G1Vector::from(gs.as_slice());
-            let fv = FieldElementVector::from(fs.as_slice());
-            let res = gv.multi_scalar_mul_const_time_naive(&fv).unwrap();
-
-            let res_1 = gv.multi_scalar_mul_var_time(&fv).unwrap();
-
-            let mut expected = G1::new();
-            let mut expected_1 = G1::new();
-            for i in 0..fs.len() {
-                expected.add_assign_(&gs[i].scalar_mul_const_time(&fs[i]));
-                expected_1.add_assign_(&(&gs[i] * &fs[i]));
-            }
-
-            let res_2 = G1Vector::_multi_scalar_mul_const_time(&gv, &fv).unwrap();
-
-            assert_eq!(expected, res);
-            assert_eq!(expected_1, res);
-            assert_eq!(res_1, res);
-            assert_eq!(res_2, res);
         }
     }
 

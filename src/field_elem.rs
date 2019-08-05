@@ -1354,7 +1354,6 @@ mod test {
             let r_ = FieldElement::from_hex(h).unwrap();
             assert_eq!(r, r_);
         }
-
     }
 
     #[test]

@@ -2,7 +2,7 @@ use clear_on_drop::clear::Clear;
 
 use crate::constants::{CurveOrder, GroupG2_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::FieldElement;
+use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
 use crate::types::{GroupG2, FP2};
 use crate::utils::hash_msg;
@@ -148,14 +148,6 @@ pub fn parse_hex_as_FP2(iter: &mut SplitWhitespace) -> Result<FP2, SerzDeserzErr
     Ok(fp2)
 }
 
-/// Represents an element of the sub-group of the elliptic curve over the prime extension field
-impl G2 {
-    /// Return underlying elliptic curve point, ECP2
-    pub fn to_ecp(&self) -> GroupG2 {
-        self.value.clone()
-    }
-}
-
 impl_group_elem_traits!(G2);
 
 impl_group_elem_conversions!(G2, GroupG2, GroupG2_SIZE);
@@ -164,7 +156,10 @@ impl_group_elem_ops!(G2);
 
 impl_scalar_mul_ops!(G2);
 
-//impl_group_element_lookup_table!(G2, G2LookupTable);
+impl_group_element_lookup_table!(G2, G2LookupTable);
+
+/// Represents an element of the sub-group of the elliptic curve over prime the extension field
+impl_optmz_scalar_mul_ops!(G2, GroupG2, G2LookupTable);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct G2Vector {
@@ -172,6 +167,9 @@ pub struct G2Vector {
 }
 
 impl_group_elem_vec_ops!(G2, G2Vector);
+
+impl_group_elem_vec_product_ops!(G2, G2Vector, G2LookupTable);
+
 impl_group_elem_vec_conversions!(G2, G2Vector);
 
 #[cfg(test)]

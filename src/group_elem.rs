@@ -1,7 +1,7 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::FieldElement;
+use crate::field_elem::{FieldElement, FieldElementVector};
 
 use std::slice::Iter;
 
@@ -395,15 +395,6 @@ macro_rules! impl_optmz_scalar_mul_ops {
                 self.value.clone()
             }
 
-            /// Computes sum of 2 scalar multiplications.
-            /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
-            /// returns self*a + h*b
-            pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
-                self.value
-                    .mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum())
-                    .into()
-            }
-
             /// Multiply point on the curve (element of group G1) with a scalar. Variable time operation
             /// Uses wNAF.
             pub fn scalar_mul_variable_time(&self, a: &FieldElement) -> Self {
@@ -693,7 +684,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Constant time multi-scalar multiplication.
             /// Taken from Guide to Elliptic Curve Cryptography book, "Algorithm 3.48 Simultaneous multiple point multiplication" without precomputing the addition
             /// Still helps with reducing doublings
-            fn _multi_scalar_mul_const_time(
+            pub(crate) fn _multi_scalar_mul_const_time(
                 group_elems: &$group_element_vec,
                 field_elems: &FieldElementVector,
             ) -> Result<$group_element, ValueError> {
@@ -811,10 +802,10 @@ mod test {
     use super::*;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
-    use crate::group_elem_g1::G1;
+    use crate::group_elem_g1::{G1, G1LookupTable, G1Vector};
     use crate::constants::GroupG1_SIZE;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::group_elem_g2::G2;
+    use crate::group_elem_g2::{G2, G2LookupTable, G2Vector};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::constants::GroupG2_SIZE;
 
@@ -1051,5 +1042,87 @@ mod test {
         serz!(G1, S1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         serz!(G2, S2);
+    }
+
+    #[test]
+    fn test_lookup_table() {
+        let x = [1, 3, 5, 7, 9, 11, 13, 15];
+        macro_rules! lk_tbl {
+            ( $group:ident, $lookup_table:ident ) => {
+                let a = $group::random();
+                let table = $lookup_table::from(&a);
+                for i in x.iter() {
+                    let f = FieldElement::from(*i as u8);
+                    let expected = &a * f;
+                    assert_eq!(expected, *table.select(*i as usize));
+                }
+            }
+        }
+        lk_tbl!(G1, G1LookupTable);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        lk_tbl!(G2, G2LookupTable);
+    }
+
+    #[test]
+    fn test_wnaf_mul() {
+        macro_rules! wnaf_mul {
+            ( $group:ident, $lookup_table:ident ) => {
+                for _ in 0..100 {
+                    let a = G1::random();
+                    let r = FieldElement::random();
+                    let expected = &a * &r;
+
+                    let table = G1LookupTable::from(&a);
+                    let wnaf = r.to_wnaf(5);
+                    let p = G1::wnaf_mul(&table, &wnaf);
+
+                    assert_eq!(expected, p);
+                }
+            }
+        }
+        wnaf_mul!(G1, G1LookupTable);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        wnaf_mul!(G2, G2LookupTable);
+    }
+
+    #[test]
+    fn test_multi_scalar_multiplication() {
+        macro_rules! mul_scal_mul {
+            ( $group:ident, $vector:ident ) => {
+                for _ in 0..5 {
+                    let mut fs = vec![];
+                    let mut gs = vec![];
+                    let gen = $group::generator();
+
+                    for i in 0..70 {
+                        fs.push(FieldElement::random());
+                        gs.push(gen.scalar_mul_const_time(&fs[i]));
+                    }
+
+                    let gv = $vector::from(gs.as_slice());
+                    let fv = FieldElementVector::from(fs.as_slice());
+                    let res = gv.multi_scalar_mul_const_time_naive(&fv).unwrap();
+
+                    let res_1 = gv.multi_scalar_mul_var_time(&fv).unwrap();
+
+                    let mut expected = $group::new();
+                    let mut expected_1 = $group::new();
+                    for i in 0..fs.len() {
+                        expected.add_assign_(&gs[i].scalar_mul_const_time(&fs[i]));
+                        expected_1.add_assign_(&(&gs[i] * &fs[i]));
+                    }
+
+                    let res_2 = $vector::_multi_scalar_mul_const_time(&gv, &fv).unwrap();
+
+                    assert_eq!(expected, res);
+                    assert_eq!(expected_1, res);
+                    assert_eq!(res_1, res);
+                    assert_eq!(res_2, res);
+                }
+            }
+        }
+        mul_scal_mul!(G1, G1Vector);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        mul_scal_mul!(G2, G2Vector);
     }
 }
