@@ -9,6 +9,7 @@ use crate::group_elem_g1::G1;
 use crate::group_elem_g2::G2;
 use std::fmt;
 
+#[derive(Clone)]
 pub struct GT {
     value: GroupGT,
 }
