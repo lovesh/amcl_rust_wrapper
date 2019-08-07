@@ -129,7 +129,9 @@ macro_rules! impl_group_elem_conversions {
 macro_rules! impl_group_elem_traits {
     ( $group_element:ident ) => {
         impl Default for $group_element {
-            fn default() -> Self { Self::new() }
+            fn default() -> Self {
+                Self::new()
+            }
         }
 
         impl fmt::Display for $group_element {
@@ -148,8 +150,8 @@ macro_rules! impl_group_elem_traits {
 
         impl Serialize for $group_element {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where
-                    S: Serializer,
+            where
+                S: Serializer,
             {
                 serializer.serialize_newtype_struct("$group_element", &self.to_hex())
             }
@@ -157,8 +159,8 @@ macro_rules! impl_group_elem_traits {
 
         impl<'a> Deserialize<'a> for $group_element {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where
-                    D: Deserializer<'a>,
+            where
+                D: Deserializer<'a>,
             {
                 struct GroupElemVisitor;
 
@@ -170,8 +172,8 @@ macro_rules! impl_group_elem_traits {
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<$group_element, E>
-                        where
-                            E: DError,
+                    where
+                        E: DError,
                     {
                         Ok($group_element::from_hex(value.to_string()).map_err(DError::custom)?)
                     }
@@ -374,7 +376,16 @@ macro_rules! impl_group_element_lookup_table {
 
         impl<'a> From<&'a $group_element> for $name {
             fn from(A: &'a $group_element) -> Self {
-                let mut Ai: [$group_element; 8] = [$group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new(), $group_element::new()];
+                let mut Ai: [$group_element; 8] = [
+                    $group_element::new(),
+                    $group_element::new(),
+                    $group_element::new(),
+                    $group_element::new(),
+                    $group_element::new(),
+                    $group_element::new(),
+                    $group_element::new(),
+                    $group_element::new(),
+                ];
                 let A2 = A.double();
                 Ai[0] = A.clone();
                 for i in 0..7 {
@@ -384,7 +395,7 @@ macro_rules! impl_group_element_lookup_table {
                 Self(Ai)
             }
         }
-    }
+    };
 }
 
 macro_rules! impl_optmz_scalar_mul_ops {
@@ -547,27 +558,32 @@ macro_rules! impl_group_elem_vec_ops {
                 self.as_slice().iter()
             }
         }
-
     };
 }
 
 macro_rules! impl_group_elem_vec_product_ops {
     ( $group_element:ident, $group_element_vec:ident, $lookup_table:ident ) => {
-
         impl $group_element_vec {
             /// Computes inner product of 2 vectors, one of field elements and other of group elements.
             /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
-            pub fn inner_product_const_time(&self, b: &FieldElementVector) -> Result<$group_element, ValueError> {
+            pub fn inner_product_const_time(
+                &self,
+                b: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
                 self.multi_scalar_mul_const_time(b)
             }
 
-            pub fn inner_product_var_time(&self, b: &FieldElementVector) -> Result<$group_element, ValueError> {
+            pub fn inner_product_var_time(
+                &self,
+                b: &FieldElementVector,
+            ) -> Result<$group_element, ValueError> {
                 self.multi_scalar_mul_var_time(b)
             }
 
             pub fn inner_product_var_time_with_ref_vecs(
                 group_elems: Vec<&$group_element>,
-                field_elems: Vec<&FieldElement>) -> Result<$group_element, ValueError> {
+                field_elems: Vec<&FieldElement>,
+            ) -> Result<$group_element, ValueError> {
                 Self::multi_scalar_mul_var_time_from_ref_vecs(group_elems, field_elems)
             }
 
@@ -631,7 +647,10 @@ macro_rules! impl_group_elem_vec_product_ops {
                     .map(|e| $lookup_table::from(e))
                     .collect();
 
-                Self::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, field_elems)
+                Self::multi_scalar_mul_var_time_with_precomputation_done(
+                    &lookup_tables,
+                    field_elems,
+                )
             }
 
             pub fn multi_scalar_mul_var_time_from_ref_vecs(
@@ -644,7 +663,10 @@ macro_rules! impl_group_elem_vec_product_ops {
                     .map(|e| $lookup_table::from(*e))
                     .collect();
 
-                Self::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, field_elems)
+                Self::multi_scalar_mul_var_time_with_precomputation_done(
+                    &lookup_tables,
+                    field_elems,
+                )
             }
 
             /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
@@ -655,10 +677,7 @@ macro_rules! impl_group_elem_vec_product_ops {
                 // Redundant check when called from multi_scalar_mul_var_time
                 check_vector_size_for_equality!(field_elems, lookup_tables)?;
 
-                let mut nafs: Vec<_> = field_elems
-                    .iter()
-                    .map(|e| e.to_wnaf(5))
-                    .collect();
+                let mut nafs: Vec<_> = field_elems.iter().map(|e| e.to_wnaf(5)).collect();
 
                 // Pad the NAFs with 0 so that all nafs are of same length
                 let new_length = pad_collection!(nafs, 0);
@@ -740,7 +759,7 @@ macro_rules! impl_group_elem_vec_product_ops {
                 Ok(r)
             }
         }
-    }
+    };
 }
 
 #[macro_export]
@@ -800,14 +819,14 @@ macro_rules! impl_group_elem_vec_conversions {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
-    use crate::group_elem_g1::{G1, G1LookupTable, G1Vector};
     use crate::constants::GroupG1_SIZE;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::group_elem_g2::{G2, G2LookupTable, G2Vector};
-    #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::constants::GroupG2_SIZE;
+    use crate::group_elem_g1::{G1LookupTable, G1Vector, G1};
+    #[cfg(any(feature = "bls381", feature = "bn254"))]
+    use crate::group_elem_g2::{G2LookupTable, G2Vector, G2};
+    use std::collections::{HashMap, HashSet};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -844,14 +863,12 @@ mod test {
     fn test_hashing() {
         // If the element can be added to HashSet or HashMap, it must be hashable.
         macro_rules! hashing {
-            ( $group:ident ) => {
-                {
-                    let mut set = HashSet::new();
-                    let mut map = HashMap::new();
-                    set.insert($group::random());
-                    map.insert($group::random(), $group::random());
-                }
-            };
+            ( $group:ident ) => {{
+                let mut set = HashSet::new();
+                let mut map = HashMap::new();
+                set.insert($group::random());
+                map.insert($group::random(), $group::random());
+            }};
         }
 
         hashing!(G1);
@@ -862,16 +879,14 @@ mod test {
     #[test]
     fn test_negating_group_elems() {
         macro_rules! negating {
-            ( $group:ident ) => {
-                {
-                    let b = $group::random();
-                    let neg_b = -&b;
-                    assert_ne!(b, neg_b);
-                    let neg_neg_b = -&neg_b;
-                    assert_eq!(b, neg_neg_b);
-                    assert_eq!(&b + &neg_b, $group::identity());
-                }
-            };
+            ( $group:ident ) => {{
+                let b = $group::random();
+                let neg_b = -&b;
+                assert_ne!(b, neg_b);
+                let neg_neg_b = -&neg_b;
+                assert_eq!(b, neg_neg_b);
+                assert_eq!(&b + &neg_b, $group::identity());
+            }};
         }
         negating!(G1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -901,21 +916,19 @@ mod test {
     #[test]
     fn test_group_elem_addition() {
         macro_rules! addition {
-            ( $group:ident ) => {
-                {
-                    let a = G1::random();
-                    let b = G1::random();
-                    let c = G1::random();
+            ( $group:ident ) => {{
+                let a = G1::random();
+                let b = G1::random();
+                let c = G1::random();
 
-                    let sum = &a + &b + &c;
+                let sum = &a + &b + &c;
 
-                    let mut expected_sum = G1::new();
-                    expected_sum = expected_sum.plus(&a);
-                    expected_sum = expected_sum.plus(&b);
-                    expected_sum = expected_sum.plus(&c);
-                    assert_eq!(sum, expected_sum);
-                }
-            };
+                let mut expected_sum = G1::new();
+                expected_sum = expected_sum.plus(&a);
+                expected_sum = expected_sum.plus(&b);
+                expected_sum = expected_sum.plus(&c);
+                assert_eq!(sum, expected_sum);
+            }};
         }
         addition!(G1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -943,20 +956,18 @@ mod test {
     fn timing_correct_order_check() {
         let count = 10;
         macro_rules! order_check {
-            ( $group:ident ) => {
-                {
-                    let start = Instant::now();
-                    for _ in 0..count {
-                        let a = $group::random();
-                        assert!(a.has_correct_order())
-                    }
-                    println!(
-                        "For {} elements, time to check correct order is {:?}",
-                        count,
-                        start.elapsed()
-                    )
+            ( $group:ident ) => {{
+                let start = Instant::now();
+                for _ in 0..count {
+                    let a = $group::random();
+                    assert!(a.has_correct_order())
                 }
-            };
+                println!(
+                    "For {} elements, time to check correct order is {:?}",
+                    count,
+                    start.elapsed()
+                )
+            }};
         }
         order_check!(G1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -974,11 +985,7 @@ mod test {
                 for i in 0..count {
                     R = R + &points[i];
                 }
-                println!(
-                    "Addition time for {} elems = {:?}",
-                    count,
-                    start.elapsed()
-                );
+                println!("Addition time for {} elems = {:?}", count, start.elapsed());
 
                 let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
                 start = Instant::now();
@@ -1008,7 +1015,7 @@ mod test {
                     let r_ = $group::from_hex(h).unwrap();
                     assert_eq!(r, r_);
                 }
-            }
+            };
         }
         hex!(G1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -1026,9 +1033,7 @@ mod test {
 
                 for _ in 0..100 {
                     let r = $group::random();
-                    let s = $s_name {
-                        val: r.clone(),
-                    };
+                    let s = $s_name { val: r.clone() };
 
                     let sz = serde_json::to_string(&s);
 
@@ -1036,7 +1041,7 @@ mod test {
                     let g: $s_name = serde_json::from_str(&st).unwrap();
                     assert_eq!(g.val, r)
                 }
-            }
+            };
         }
 
         serz!(G1, S1);
@@ -1056,7 +1061,7 @@ mod test {
                     let expected = &a * f;
                     assert_eq!(expected, *table.select(*i as usize));
                 }
-            }
+            };
         }
         lk_tbl!(G1, G1LookupTable);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -1078,7 +1083,7 @@ mod test {
 
                     assert_eq!(expected, p);
                 }
-            }
+            };
         }
         wnaf_mul!(G1, G1LookupTable);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -1119,7 +1124,7 @@ mod test {
                     assert_eq!(res_1, res);
                     assert_eq!(res_2, res);
                 }
-            }
+            };
         }
         mul_scal_mul!(G1, G1Vector);
         #[cfg(any(feature = "bls381", feature = "bn254"))]

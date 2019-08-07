@@ -164,7 +164,6 @@ mod test {
         assert!(GT::ate_2_pairing(&g1, &g2_identity, &h1, &h2) == GT::ate_pairing(&h1, &h2));
         assert!(GT::ate_2_pairing(&g1_identity, &g2_identity, &g1_identity, &g2_identity).is_one());
 
-
         let k1 = G1::random();
         let k2 = G2::random();
 
@@ -189,9 +188,12 @@ mod test {
                 == GT::ate_multi_pairing(vec![(&g1, &g2), (&k1, &k2)]),
         );
 
-        assert!(GT::ate_multi_pairing(vec![(&g1_identity, &g2_identity),
-                                           (&g1_identity, &g2_identity),
-                                           (&g1_identity, &g2_identity)]).is_one());
+        assert!(GT::ate_multi_pairing(vec![
+            (&g1_identity, &g2_identity),
+            (&g1_identity, &g2_identity),
+            (&g1_identity, &g2_identity)
+        ])
+        .is_one());
     }
 
     #[test]

@@ -12,8 +12,8 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
-use serde::ser::{Error as SError, Serialize, Serializer};
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use serde::ser::{Error as SError, Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};
 
 #[derive(Clone, Debug)]
@@ -138,10 +138,11 @@ impl G1 {
     /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
     /// returns self*a + h*b
     pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
-        self.value.mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum()).into()
+        self.value
+            .mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum())
+            .into()
     }
 }
-
 
 impl_group_elem_traits!(G1);
 
@@ -178,15 +179,15 @@ pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
             // Parsing as u32 since xes cannot be negative
             match u32::from_str(i) {
                 Ok(xes) => xes as i32,
-                Err(_) => return Err(SerzDeserzError::CannotParseFP)
+                Err(_) => return Err(SerzDeserzError::CannotParseFP),
             }
         }
-        None => return Err(SerzDeserzError::CannotParseFP)
+        None => return Err(SerzDeserzError::CannotParseFP),
     };
 
     let x = match iter.next() {
         Some(i) => FieldElement::parse_hex_as_bignum(i.to_string())?,
-        None => return Err(SerzDeserzError::CannotParseFP)
+        None => return Err(SerzDeserzError::CannotParseFP),
     };
 
     Ok(FP { x, xes })

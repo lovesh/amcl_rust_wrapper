@@ -13,8 +13,8 @@ use std::slice::Iter;
 
 use clear_on_drop::clear::Clear;
 
-use serde::ser::{Error as SError, Serialize, Serializer};
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use serde::ser::{Error as SError, Serialize, Serializer};
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -47,7 +47,9 @@ impl Hash for FieldElement {
 }
 
 impl Default for FieldElement {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Drop for FieldElement {
@@ -417,7 +419,7 @@ impl FieldElement {
 
         let mut val = val;
         // Given hex cannot be bigger than max byte size
-        if val.len() > MODBYTES*2 {
+        if val.len() > MODBYTES * 2 {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 val.len(),
                 MODBYTES,
@@ -425,17 +427,19 @@ impl FieldElement {
         }
 
         // Pad the string for constant time parsing.
-        while val.len() < MODBYTES*2 {
+        while val.len() < MODBYTES * 2 {
             val.insert(0, '0');
         }
 
         let mut res = BigNum::new();
         for i in 0..val.len() {
-            match u8::from_str_radix(&val[i..i+1], 16) {
+            match u8::from_str_radix(&val[i..i + 1], 16) {
                 Ok(n) => res.w[0] += n as Limb,
-                Err(_) => return Err(SerzDeserzError::RequiredHexChar)
+                Err(_) => return Err(SerzDeserzError::RequiredHexChar),
             }
-            if i == (val.len()-1) {break}
+            if i == (val.len() - 1) {
+                break;
+            }
             res.shl(4);
         }
         return Ok(res);
@@ -444,16 +448,16 @@ impl FieldElement {
 
 impl Serialize for FieldElement {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         serializer.serialize_newtype_struct("FieldElement", &self.to_hex())
     }
 }
 impl<'a> Deserialize<'a> for FieldElement {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'a>,
+    where
+        D: Deserializer<'a>,
     {
         struct FieldElementVisitor;
 
@@ -465,8 +469,8 @@ impl<'a> Deserialize<'a> for FieldElement {
             }
 
             fn visit_str<E>(self, value: &str) -> Result<FieldElement, E>
-                where
-                    E: DError,
+            where
+                E: DError,
             {
                 Ok(FieldElement::from_hex(value.to_string()).map_err(DError::custom)?)
             }
@@ -707,7 +711,7 @@ impl FieldElementVector {
             let mut v = Vec::<FieldElement>::with_capacity(size);
             v.push(FieldElement::one());
             for i in 1..size {
-                v.push(&v[i-1] * elem);
+                v.push(&v[i - 1] * elem);
             }
             v.into()
         }
@@ -894,9 +898,9 @@ pub fn multiply_row_vector_with_matrix(
 mod test {
     use super::*;
     use amcl::bls381::big::BIG;
+    use serde_json;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
-    use serde_json;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -1283,10 +1287,8 @@ mod test {
     #[test]
     fn timing_field_elem_squaring() {
         let count = 1000;
-        let fs: Vec<FieldElement> = (0..count)
-            .map(|_| FieldElement::random())
-            .collect();
-        let nums: Vec<BigNum> = fs.iter().map(|f|f.to_bignum()).collect();
+        let fs: Vec<FieldElement> = (0..count).map(|_| FieldElement::random()).collect();
+        let nums: Vec<BigNum> = fs.iter().map(|f| f.to_bignum()).collect();
         let mut r1 = vec![];
         let mut r2 = vec![];
 
@@ -1336,13 +1338,13 @@ mod test {
         let mut h = r1.to_hex();
         // Make hex string bigger
         h.insert(0, '0');
-        assert!(h.len() > MODBYTES*2);
+        assert!(h.len() > MODBYTES * 2);
         assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
 
         let mut h = r1.to_hex();
         // Add non hex character
         h = h.replacen("0", "G", 1);
-        assert_eq!(h.len(), MODBYTES*2);
+        assert_eq!(h.len(), MODBYTES * 2);
         assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
     }
 
@@ -1364,9 +1366,7 @@ mod test {
         }
         for _ in 0..100 {
             let r = FieldElement::random();
-            let s = Temp {
-                val: r.clone(),
-            };
+            let s = Temp { val: r.clone() };
 
             let serialized = serde_json::to_string(&s);
             assert!(serialized.is_ok());

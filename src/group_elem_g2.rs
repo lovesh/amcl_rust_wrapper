@@ -12,10 +12,10 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
-use serde::ser::{Error as SError, Serialize, Serializer};
-use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use std::str::SplitWhitespace;
 use crate::group_elem_g1::parse_hex_as_FP;
+use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use serde::ser::{Error as SError, Serialize, Serializer};
+use std::str::SplitWhitespace;
 
 #[derive(Clone, Debug)]
 pub struct G2 {
