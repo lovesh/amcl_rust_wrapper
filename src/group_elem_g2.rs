@@ -1,5 +1,3 @@
-use clear_on_drop::clear::Clear;
-
 use crate::constants::{CurveOrder, GroupG2_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
@@ -148,7 +146,7 @@ pub fn parse_hex_as_FP2(iter: &mut SplitWhitespace) -> Result<FP2, SerzDeserzErr
     Ok(fp2)
 }
 
-impl_group_elem_traits!(G2);
+impl_group_elem_traits!(G2, GroupG2);
 
 impl_group_elem_conversions!(G2, GroupG2, GroupG2_SIZE);
 

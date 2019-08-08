@@ -127,7 +127,7 @@ macro_rules! impl_group_elem_conversions {
 
 #[macro_export]
 macro_rules! impl_group_elem_traits {
-    ( $group_element:ident ) => {
+    ( $group_element:ident, $group:ident ) => {
         impl Default for $group_element {
             fn default() -> Self {
                 Self::new()
@@ -144,7 +144,9 @@ macro_rules! impl_group_elem_traits {
         impl Drop for $group_element {
             fn drop(&mut self) {
                 // x, y and z of ECP and ECP2 are private. So the only sensible way of zeroing them out seems setting them to infinity
-                self.value.inf()
+                use core::{ptr, sync::atomic};
+                unsafe { ptr::write_volatile(&mut self.value, $group::new()); }
+                atomic::compiler_fence(atomic::Ordering::SeqCst);
             }
         }
 

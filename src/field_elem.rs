@@ -11,10 +11,10 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
 
-use clear_on_drop::clear::Clear;
-
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
+
+use zeroize::Zeroize;
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -54,7 +54,9 @@ impl Default for FieldElement {
 
 impl Drop for FieldElement {
     fn drop(&mut self) {
-        self.value.w.clear();
+        use core::{ptr, sync::atomic};
+        unsafe { ptr::write_volatile(&mut self.value, BigNum::new()); }
+        atomic::compiler_fence(atomic::Ordering::SeqCst);
     }
 }
 

@@ -1,5 +1,3 @@
-use clear_on_drop::clear::Clear;
-
 use crate::constants::{CurveOrder, GroupG1_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
@@ -144,7 +142,7 @@ impl G1 {
     }
 }
 
-impl_group_elem_traits!(G1);
+impl_group_elem_traits!(G1, GroupG1);
 
 impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
 
