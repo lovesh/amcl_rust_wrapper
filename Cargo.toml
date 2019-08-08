@@ -2,6 +2,10 @@
 name = "amcl_wrapper"
 version = "0.1.0"
 authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
+description = "Wapper over Milagro Cryptographic Library (version 3)"
+repository = "https://github.com/lovesh/amcl_rust_wrapper"
+
+license = "Apache-2.0"
 edition = "2018"
 exclude = [
     "fuzz/artifacts/*",
@@ -24,9 +28,6 @@ serde_json = "1.0"
 serde_derive = "1.0"
 
 [dependencies.amcl]
-#git = "https://github.com/miracl/amcl"
-#branch = "master"
-#rev = "f39c8b9fa77f706362d8503ff7e077f547b86705"
 package = "miracl_amcl"
 version = "3.2.5"
 features = ["bls381", "bn254", "secp256k1", "ed25519"]
