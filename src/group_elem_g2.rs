@@ -13,6 +13,8 @@ use std::slice::Iter;
 use crate::group_elem_g1::parse_hex_as_FP;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
+use zeroize::Zeroize;
+
 use std::str::SplitWhitespace;
 
 #[derive(Clone, Debug)]

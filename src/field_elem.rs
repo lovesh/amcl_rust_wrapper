@@ -52,11 +52,15 @@ impl Default for FieldElement {
     }
 }
 
+impl Zeroize for FieldElement {
+    fn zeroize(&mut self) {
+        self.value.w.zeroize();
+    }
+}
+
 impl Drop for FieldElement {
     fn drop(&mut self) {
-        use core::{ptr, sync::atomic};
-        unsafe { ptr::write_volatile(&mut self.value, BigNum::new()); }
-        atomic::compiler_fence(atomic::Ordering::SeqCst);
+        self.zeroize()
     }
 }
 
@@ -686,7 +690,7 @@ impl Neg for &FieldElement {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FieldElementVector {
     elems: Vec<FieldElement>,
 }

@@ -141,12 +141,18 @@ macro_rules! impl_group_elem_traits {
             }
         }
 
-        impl Drop for $group_element {
-            fn drop(&mut self) {
+        impl Zeroize for $group_element {
+            fn zeroize(&mut self) {
                 // x, y and z of ECP and ECP2 are private. So the only sensible way of zeroing them out seems setting them to infinity
                 use core::{ptr, sync::atomic};
                 unsafe { ptr::write_volatile(&mut self.value, $group::new()); }
                 atomic::compiler_fence(atomic::Ordering::SeqCst);
+            }
+        }
+
+        impl Drop for $group_element {
+            fn drop(&mut self) {
+                self.zeroize()
             }
         }
 
