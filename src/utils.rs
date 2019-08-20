@@ -1,4 +1,5 @@
 extern crate rand;
+extern crate sha3;
 
 use rand::rngs::EntropyRng;
 use rand::{CryptoRng, RngCore};
@@ -8,16 +9,15 @@ use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
 use crate::errors::SerzDeserzError;
-use amcl::sha3::{SHA3, SHAKE256};
+use sha3::{Digest, Sha3_256, Shake256};
+use sha3::digest::{Input, ExtendableOutput, XofReader};
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
-    let mut hasher = SHA3::new(SHAKE256);
-    for i in 0..msg.len() {
-        hasher.process(msg[i]);
-    }
+    let mut hasher = Shake256::default();
+    hasher.input(&msg);
     let mut h: [u8; MODBYTES] = [0; MODBYTES];
-    hasher.shake(&mut h, MODBYTES);
+    hasher.xof_result().read(&mut h);
     h
 }
 
