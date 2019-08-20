@@ -137,9 +137,9 @@ impl FieldElement {
 
     /// Hash an arbitrary sized message using SHAKE and return output as a field element
     pub fn from_msg_hash(msg: &[u8]) -> Self {
-        let mut value = BigNum::new();
+        let mut value = hash_mod_order(msg);
         while value.iszilch() {
-            value = hash_mod_order(msg);
+            value.inc(1);
         }
         FieldElement { value }
     }
