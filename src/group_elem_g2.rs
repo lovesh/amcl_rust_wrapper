@@ -1,4 +1,4 @@
-use crate::constants::{CurveOrder, GroupG2_SIZE};
+use crate::constants::{CURVE_ORDER, GROUP_G2_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
@@ -12,7 +12,7 @@ use std::slice::Iter;
 
 use crate::group_elem_g1::parse_hex_as_FP;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::ser::{Serialize, Serializer};
 use zeroize::Zeroize;
 
 use std::str::SplitWhitespace;
@@ -54,16 +54,16 @@ impl GroupElement for G2 {
     fn to_bytes(&self) -> Vec<u8> {
         let mut temp = GroupG2::new();
         temp.copy(&self.value);
-        let mut bytes: [u8; GroupG2_SIZE] = [0; GroupG2_SIZE];
+        let mut bytes: [u8; GROUP_G2_SIZE] = [0; GROUP_G2_SIZE];
         temp.tobytes(&mut bytes);
         bytes.to_vec()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != GroupG2_SIZE {
+        if bytes.len() != GROUP_G2_SIZE {
             return Err(SerzDeserzError::G2BytesIncorrectSize(
                 bytes.len(),
-                GroupG2_SIZE,
+                GROUP_G2_SIZE,
             ));
         }
         Ok(GroupG2::frombytes(bytes).into())
@@ -126,11 +126,11 @@ impl GroupElement for G2 {
     }
 
     fn is_extension() -> bool {
-        return true;
+        true
     }
 
     fn has_correct_order(&self) -> bool {
-        return self.value.mul(&CurveOrder).is_infinity();
+        self.value.mul(&CURVE_ORDER).is_infinity()
     }
 }
 
@@ -150,7 +150,7 @@ pub fn parse_hex_as_FP2(iter: &mut SplitWhitespace) -> Result<FP2, SerzDeserzErr
 
 impl_group_elem_traits!(G2, GroupG2);
 
-impl_group_elem_conversions!(G2, GroupG2, GroupG2_SIZE);
+impl_group_elem_conversions!(G2, GroupG2, GROUP_G2_SIZE);
 
 impl_group_elem_ops!(G2);
 
@@ -158,7 +158,7 @@ impl_scalar_mul_ops!(G2);
 
 impl_group_element_lookup_table!(G2, G2LookupTable);
 
-/// Represents an element of the sub-group of the elliptic curve over prime the extension field
+// Represents an element of the sub-group of the elliptic curve over prime the extension field
 impl_optmz_scalar_mul_ops!(G2, GroupG2, G2LookupTable);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -174,8 +174,6 @@ impl_group_elem_vec_conversions!(G2, G2Vector);
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
     fn test_parse_hex_for_FP2() {
         // TODO:

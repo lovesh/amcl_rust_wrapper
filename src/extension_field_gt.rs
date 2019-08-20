@@ -51,6 +51,20 @@ impl GT {
         Self { value: fexp(&e) }
     }
 
+    /// Reduced ate double pairing which inverts the first point so unity can be checked
+    pub fn ate_2_pairing_cmp(g1: &G1, g2: &G2, h1: &G1, h2: &G2) -> bool {
+        if g1.is_identity() || g2.is_identity() {
+            return Self::ate_pairing(h1, h2).is_one();
+        }
+        if h1.is_identity() || h2.is_identity() {
+            return Self::ate_pairing(g1, g2).is_one();
+        }
+
+        let p = g1.negation();
+        let value = fexp(&ate2(&g2.to_ecp(), &p.to_ecp(), &h2.to_ecp(), &h1.to_ecp()));
+        value.isunity()
+    }
+
     /// Reduced ate multi pairing. Takes a vector of tuples of group elements G1 and G2 as Vec<(&G1, &G2)>.
     /// Returns the product of their pairings.
     /// More efficient than using ate_pairing or ate_2_pairing and multiplying results
@@ -79,7 +93,7 @@ impl GT {
     }
 
     pub fn is_one(&self) -> bool {
-        return self.value.isunity();
+        self.value.isunity()
     }
 
     pub fn one() -> Self {
@@ -104,8 +118,7 @@ impl PartialEq for GT {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::group_elem_g1::G1Vector;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_unity() {

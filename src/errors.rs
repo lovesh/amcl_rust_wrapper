@@ -22,13 +22,13 @@ pub enum SerzDeserzError {
 impl fmt::Display for SerzDeserzError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            SerzDeserzError::FieldElementBytesIncorrectSize(a, b) => {
+            SerzDeserzError::FieldElementBytesIncorrectSize(_a, _b) => {
                 write!(f, "Incorrect bytes size for field element")
             }
-            SerzDeserzError::G1BytesIncorrectSize(a, b) => {
+            SerzDeserzError::G1BytesIncorrectSize(_a, _b) => {
                 write!(f, "Incorrect bytes size for G1 group element")
             }
-            SerzDeserzError::G2BytesIncorrectSize(a, b) => {
+            SerzDeserzError::G2BytesIncorrectSize(_a, _b) => {
                 write!(f, "Incorrect bytes size for G2 group element")
             }
             SerzDeserzError::RequiredHexChar => write!(f, "Required hex character"),

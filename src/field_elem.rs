@@ -1,10 +1,9 @@
-use rand::{CryptoRng, RngCore};
+use rand::prelude::*;
 
-use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
+use crate::constants::{BARRETT_REDC_K, BARRETT_REDC_U, BARRETT_REDC_V, CURVE_ORDER, MODBYTES, NLEN};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum, Limb};
-use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
-use amcl::rand::RAND;
+use crate::utils::{barrett_reduction, hash_mod_order, random_mod_order};
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -12,7 +11,7 @@ use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::slice::Iter;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::ser::{Serialize, Serializer};
 
 use zeroize::Zeroize;
 
@@ -126,52 +125,54 @@ impl FieldElement {
             ));
         }
         let mut n = BigNum::frombytes(bytes);
-        n.rmod(&CurveOrder);
+        n.rmod(&CURVE_ORDER);
         Ok(Self { value: n })
     }
 
     pub fn to_bignum(&self) -> BigNum {
         let mut v = self.value.clone();
-        v.rmod(&CurveOrder);
+        v.rmod(&CURVE_ORDER);
         v
     }
 
     /// Hash an arbitrary sized message using SHAKE and return output as a field element
     pub fn from_msg_hash(msg: &[u8]) -> Self {
-        // TODO: Ensure result is not 0
-        let h = &hash_msg(msg);
-        h.into()
+        let mut value = BigNum::new();
+        while value.iszilch() {
+            value = hash_mod_order(msg);
+        }
+        FieldElement { value }
     }
 
     /// Add a field element to itself. `self = self + b`
     pub fn add_assign_(&mut self, b: &Self) {
         // Not using `self.plus` to avoid cloning. Breaking the abstraction a bit for performance.
         self.value.add(&b.value);
-        self.value.rmod(&CurveOrder);
+        self.value.rmod(&CURVE_ORDER);
     }
 
     /// Subtract a field element from itself. `self = self - b`
     pub fn sub_assign_(&mut self, b: &Self) {
         // Not using `self.minus` to avoid cloning. Breaking the abstraction a bit for performance.
-        let neg_b = BigNum::modneg(&b.value, &CurveOrder);
+        let neg_b = BigNum::modneg(&b.value, &CURVE_ORDER);
         self.value.add(&neg_b);
-        self.value.rmod(&CurveOrder);
+        self.value.rmod(&CURVE_ORDER);
     }
 
     /// Return sum of a field element and itself. `self + b`
     pub fn plus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         sum.add(&b.value);
-        sum.rmod(&CurveOrder);
+        sum.rmod(&CURVE_ORDER);
         sum.into()
     }
 
     /// Return difference of a field element and itself. `self - b`
     pub fn minus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
-        let neg_b = BigNum::modneg(&b.value, &CurveOrder);
+        let neg_b = BigNum::modneg(&b.value, &CURVE_ORDER);
         sum.add(&neg_b);
-        sum.rmod(&CurveOrder);
+        sum.rmod(&CURVE_ORDER);
         sum.into()
     }
 
@@ -206,7 +207,7 @@ impl FieldElement {
             return Self::zero();
         }
         let mut inv = self.value.clone();
-        inv.invmodp(&CurveOrder);
+        inv.invmodp(&CURVE_ORDER);
         inv.into()
     }
 
@@ -215,7 +216,7 @@ impl FieldElement {
         if self.is_zero() {
             self.value = BigNum::new();
         } else {
-            self.value.invmodp(&CurveOrder);
+            self.value.invmodp(&CURVE_ORDER);
         }
     }
 
@@ -263,30 +264,26 @@ impl FieldElement {
             }
             b_vec[i] = c_vec;
         }
-        return b_vec;
+        b_vec
     }
 
     /// Return a random non-zero field element using given random number generator
     fn random_field_element_using_rng<R: RngCore + CryptoRng>(rng: &mut R) -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
-        let entropy_size = 256;
-        let mut r = get_seeded_RNG_with_rng(entropy_size, rng);
-        Self::get_big_num_from_RAND(&mut r)
+        let mut value = BigNum::new();
+        while value.iszilch() {
+            value = random_mod_order(Some(rng));
+        }
+        value
     }
 
     fn random_field_element() -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
-        let entropy_size = 256;
-        let mut r = get_seeded_RNG(entropy_size);
-        Self::get_big_num_from_RAND(&mut r)
-    }
-
-    fn get_big_num_from_RAND(r: &mut RAND) -> BigNum {
-        let mut n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), r);
-        while n.iszilch() {
-            n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), r);
+        let mut value = BigNum::new();
+        while value.iszilch() {
+            value = random_mod_order::<ThreadRng>(None);
         }
-        n
+        value
     }
 
     /// Conversion to wNAF, i.e. windowed Non Adjacent form
@@ -406,14 +403,14 @@ impl FieldElement {
     /// Create big number from hex string in big endian
     pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
         let mut f = Self::parse_hex_as_bignum(s)?;
-        f.rmod(&CurveOrder);
+        f.rmod(&CURVE_ORDER);
         Ok(f.into())
     }
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
-        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
-        barrett_reduction(&x, &CurveOrder, k, &u, &v)
+        let (k, u, v) = (*BARRETT_REDC_K, *BARRETT_REDC_U, *BARRETT_REDC_V);
+        barrett_reduction(&x, &CURVE_ORDER, k, &u, &v)
     }
 
     /// Parse given hex string as BigNum in constant time.
@@ -448,7 +445,7 @@ impl FieldElement {
             }
             res.shl(4);
         }
-        return Ok(res);
+        Ok(res)
     }
 }
 
@@ -527,7 +524,7 @@ impl From<BigNum> for FieldElement {
 impl From<&[u8; MODBYTES]> for FieldElement {
     fn from(x: &[u8; MODBYTES]) -> Self {
         let mut n = BigNum::frombytes(x);
-        n.rmod(&CurveOrder);
+        n.rmod(&CURVE_ORDER);
         Self { value: n }
     }
 }
@@ -903,14 +900,13 @@ pub fn multiply_row_vector_with_matrix(
 #[cfg(test)]
 mod test {
     use super::*;
-    use amcl::bls381::big::BIG;
     use serde_json;
     use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_to_and_from_bytes() {
-        let mut rng = rand::thread_rng();
+        let mut rng = thread_rng();
         for _ in 0..100 {
             let x = FieldElement::random_using_rng(&mut rng);
             let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
@@ -1046,7 +1042,7 @@ mod test {
         let two_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::from(2u8), 10);
         let base = 2u32;
         for i in 0..10 {
-            assert_eq!(two_vec[i], FieldElement::from(base.pow(i as u32) as u32));
+            assert_eq!(two_vec[i], FieldElement::from(base.pow(i as u32)));
         }
     }
 
@@ -1115,14 +1111,14 @@ mod test {
     #[test]
     fn test_field_elem_to_from_base() {
         for i in 0..4 {
-            let x = FieldElement::from(i as u8);
+            let x = FieldElement::from(i);
             let b = x.to_power_of_2_base(2);
             assert_eq!(b, vec![i]);
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 2));
         }
 
         for i in 0..8 {
-            let x = FieldElement::from(i as u8);
+            let x = FieldElement::from(i);
             let b = x.to_power_of_2_base(3);
             assert_eq!(b, vec![i]);
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 3));
@@ -1141,7 +1137,7 @@ mod test {
                 vec![0, 1, 1, 0, 0, 2, 3, 0, 3, 0, 2, 0, 3, 0, 1, 0, 2],
             ),
         ] {
-            let x = FieldElement::from(n as u64);
+            let x = FieldElement::from(n);
             let b = x.to_power_of_2_base(2);
             assert_eq!(b, expected_4);
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 2));
@@ -1153,13 +1149,13 @@ mod test {
             (6719, vec![7, 7, 0, 5, 1]),
             (8911009812u64, vec![4, 2, 0, 4, 3, 6, 0, 1, 3, 2, 0, 1]),
         ] {
-            let x = FieldElement::from(n as u64);
+            let x = FieldElement::from(n);
             let b = x.to_power_of_2_base(3);
             assert_eq!(b, expected_8);
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 3));
         }
 
-        for i in 0..100 {
+        for _ in 0..100 {
             let x = FieldElement::random();
             for base in 2..8 {
                 let digits = x.to_power_of_2_base(base);
@@ -1242,15 +1238,15 @@ mod test {
         let mut o1 = vec![];
         let mut o2 = vec![];
 
-        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
+        let (k, u, v) = (*BARRETT_REDC_K, *BARRETT_REDC_U, *BARRETT_REDC_V);
         let mut start = Instant::now();
         for i in 0..count {
             let mut a = l[i].clone();
-            a.rmod(&CurveOrder);
+            a.rmod(&CURVE_ORDER);
             let mut b = r[i].clone();
-            b.rmod(&CurveOrder);
+            b.rmod(&CURVE_ORDER);
             let d = BigNum::mul(&a, &b);
-            o1.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
+            o1.push(barrett_reduction(&d, &CURVE_ORDER, k, &u, &v));
         }
         println!("Mul1 for {} elems = {:?}", count, start.elapsed());
 
@@ -1259,7 +1255,7 @@ mod test {
             let a = l[i].clone();
             let b = r[i].clone();
             let d = BigNum::mul(&a, &b);
-            o2.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
+            o2.push(barrett_reduction(&d, &CURVE_ORDER, k, &u, &v));
         }
         println!("Mul2 for {} elems = {:?}", count, start.elapsed());
 
@@ -1270,11 +1266,11 @@ mod test {
         let mut x = BigNum::new_int(1isize);
         start = Instant::now();
         for i in 0..count {
-            x.rmod(&CurveOrder);
+            x.rmod(&CURVE_ORDER);
             let mut b = o1[i].clone();
-            b.rmod(&CurveOrder);
+            b.rmod(&CURVE_ORDER);
             let d = BigNum::mul(&x, &b);
-            x = barrett_reduction(&d, &CurveOrder, k, &u, &v);
+            x = barrett_reduction(&d, &CURVE_ORDER, k, &u, &v);
         }
         println!("Mul1 all for {} elems = {:?}", count, start.elapsed());
 
@@ -1283,7 +1279,7 @@ mod test {
         for i in 0..count {
             let b = o2[i].clone();
             let d = BigNum::mul(&y, &b);
-            y = barrett_reduction(&d, &CurveOrder, k, &u, &v);
+            y = barrett_reduction(&d, &CURVE_ORDER, k, &u, &v);
         }
         println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
 
@@ -1315,20 +1311,20 @@ mod test {
 
         let start = Instant::now();
         for i in 0..count {
-            BigNum::modmul(&nums[i], &nums[i], &CurveOrder);
+            BigNum::modmul(&nums[i], &nums[i], &CURVE_ORDER);
         }
         println!("Mul time for {} big nums = {:?}", count, start.elapsed());
 
         let start = Instant::now();
         for i in 0..count {
-            BigNum::modsqr(&nums[i], &CurveOrder);
+            BigNum::modsqr(&nums[i], &CURVE_ORDER);
         }
         println!("Sqr time for {} big nums = {:?}", count, start.elapsed());
     }
 
     #[test]
     fn test_parse_hex_as_bignum() {
-        for i in 0..100 {
+        for _ in 0..100 {
             let b = FieldElement::random().to_bignum();
             let h = b.clone().to_hex();
             let b1 = FieldElement::parse_hex_as_bignum(h.clone()).unwrap();

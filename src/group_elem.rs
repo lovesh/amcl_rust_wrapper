@@ -1,7 +1,7 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::{FieldElement, FieldElementVector};
+use crate::field_elem::FieldElement;
 
 use std::slice::Iter;
 
@@ -827,14 +827,16 @@ macro_rules! impl_group_elem_vec_conversions {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::constants::GroupG1_SIZE;
+    use crate::constants::GROUP_G1_SIZE;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::constants::GroupG2_SIZE;
+    use crate::constants::GROUP_G2_SIZE;
     use crate::group_elem_g1::{G1LookupTable, G1Vector, G1};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::group_elem_g2::{G2LookupTable, G2Vector, G2};
+    #[cfg(any(feature = "bls381", feature = "bn254"))]
+    use crate::field_elem::FieldElementVector;
     use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -862,9 +864,9 @@ mod test {
             };
         }
 
-        to_and_fro_bytes!(G1, GroupG1_SIZE);
+        to_and_fro_bytes!(G1, GROUP_G1_SIZE);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        to_and_fro_bytes!(G2, GroupG2_SIZE);
+        to_and_fro_bytes!(G2, GROUP_G2_SIZE);
     }
 
     #[test]
@@ -947,7 +949,7 @@ mod test {
     fn test_negation() {
         macro_rules! neg {
             ( $group:ident ) => {
-                for i in 0..10 {
+                for _ in 0..10 {
                     let a = G1::random();
                     let b = a.negation();
                     assert!((a + b).is_identity())
@@ -982,36 +984,36 @@ mod test {
         order_check!(G2);
     }
 
-    #[test]
-    fn timing_group_elem_addition_and_scalar_multiplication() {
-        let count = 100;
-        macro_rules! add_mul {
-            ( $group:ident ) => {
-                let points: Vec<_> = (0..100).map(|_| $group::random()).collect();
-                let mut R = $group::random();
-                let mut start = Instant::now();
-                for i in 0..count {
-                    R = R + &points[i];
-                }
-                println!("Addition time for {} elems = {:?}", count, start.elapsed());
-
-                let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
-                start = Instant::now();
-                for i in 0..count {
-                    &points[i] * &fs[i];
-                }
-                println!(
-                    "Scalar multiplication time for {} elems = {:?}",
-                    count,
-                    start.elapsed()
-                );
-            };
-        }
-
-        add_mul!(G1);
-        #[cfg(any(feature = "bls381", feature = "bn254"))]
-        add_mul!(G2);
-    }
+//    #[test]
+//    fn timing_group_elem_addition_and_scalar_multiplication() {
+//        let count = 100;
+//        macro_rules! add_mul {
+//            ( $group:ident ) => {
+//                let mut points: Vec<_> = (0..100).map(|_| $group::random()).collect();
+//                let mut R = $group::random();
+//                let mut start = Instant::now();
+//                for i in 0..count {
+//                    R = R + &points[i];
+//                }
+//                println!("Addition time for {} elems = {:?}", count, start.elapsed());
+//
+//                let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
+//                start = Instant::now();
+//                for i in 0..count {
+//                    &points[i] = &fs[i];
+//                }
+//                println!(
+//                    "Scalar multiplication time for {} elems = {:?}",
+//                    count,
+//                    start.elapsed()
+//                );
+//            };
+//        }
+//
+//        add_mul!(G1);
+//        #[cfg(any(feature = "bls381", feature = "bn254"))]
+//        add_mul!(G2);
+//    }
 
     #[test]
     fn test_hex_group_elem() {

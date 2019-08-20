@@ -1,4 +1,11 @@
 #![allow(non_snake_case)]
+#![deny(
+    warnings,
+    unused_import_braces,
+    unused_qualifications,
+    trivial_casts,
+    trivial_numeric_casts
+)]
 
 pub extern crate amcl;
 
@@ -51,7 +58,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
 extern crate serde_json;
 
 // TODO: Move the timing tests to benchmark

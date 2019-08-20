@@ -1,4 +1,4 @@
-use crate::constants::{CurveOrder, GroupG1_SIZE};
+use crate::constants::{CURVE_ORDER, GROUP_G1_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::ser::{Serialize, Serializer};
 use zeroize::Zeroize;
 use std::str::{FromStr, SplitWhitespace};
 
@@ -52,16 +52,16 @@ impl GroupElement for G1 {
     fn to_bytes(&self) -> Vec<u8> {
         let mut temp = GroupG1::new();
         temp.copy(&self.value);
-        let mut bytes: [u8; GroupG1_SIZE] = [0; GroupG1_SIZE];
+        let mut bytes: [u8; GROUP_G1_SIZE] = [0; GROUP_G1_SIZE];
         temp.tobytes(&mut bytes, false);
         bytes.to_vec()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != GroupG1_SIZE {
+        if bytes.len() != GROUP_G1_SIZE {
             return Err(SerzDeserzError::G1BytesIncorrectSize(
                 bytes.len(),
-                GroupG1_SIZE,
+                GROUP_G1_SIZE,
             ));
         }
         Ok(GroupG1::frombytes(bytes).into())
@@ -124,11 +124,11 @@ impl GroupElement for G1 {
     }
 
     fn is_extension() -> bool {
-        return false;
+        false
     }
 
     fn has_correct_order(&self) -> bool {
-        return self.value.mul(&CurveOrder).is_infinity();
+        self.value.mul(&CURVE_ORDER).is_infinity()
     }
 }
 
@@ -145,7 +145,7 @@ impl G1 {
 
 impl_group_elem_traits!(G1, GroupG1);
 
-impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
+impl_group_elem_conversions!(G1, GroupG1, GROUP_G1_SIZE);
 
 impl_group_elem_ops!(G1);
 
@@ -153,7 +153,7 @@ impl_scalar_mul_ops!(G1);
 
 impl_group_element_lookup_table!(G1, G1LookupTable);
 
-/// Represents an element of the sub-group of the elliptic curve over the prime field
+// Represents an element of the sub-group of the elliptic curve over the prime field
 impl_optmz_scalar_mul_ops!(G1, GroupG1, G1LookupTable);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -195,8 +195,7 @@ pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_parse_hex_for_FP() {
