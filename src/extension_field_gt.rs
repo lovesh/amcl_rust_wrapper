@@ -21,6 +21,13 @@ impl fmt::Display for GT {
     }
 }
 
+impl fmt::Debug for GT {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut c = self.value.clone();
+        write!(f, "{}", c.tostring())
+    }
+}
+
 impl GT {
     pub fn new() -> Self {
         Self {
