@@ -145,7 +145,9 @@ macro_rules! impl_group_elem_traits {
             fn zeroize(&mut self) {
                 // x, y and z of ECP and ECP2 are private. So the only sensible way of zeroing them out seems setting them to infinity
                 use core::{ptr, sync::atomic};
-                unsafe { ptr::write_volatile(&mut self.value, $group::new()); }
+                unsafe {
+                    ptr::write_volatile(&mut self.value, $group::new());
+                }
                 atomic::compiler_fence(atomic::Ordering::SeqCst);
             }
         }
@@ -472,13 +474,19 @@ pub trait GroupElementVector<T>: Sized {
 
     fn append(&mut self, other: &mut Self);
 
-    /// Compute sum of all elements of a vector
+    fn pop(&mut self) -> Option<T>;
+
+    fn remove(&mut self, index: usize) -> T;
+
+    /// Compute sum of all elements of the vector
     fn sum(&self) -> T;
 
-    /// Multiply each field element of the vector with another given field
-    /// element `n` (scale the vector)
+    /// Multiply each element of the vector with a given field
+    /// element `n` (scale the vector). Modifies the vector.
     fn scale(&mut self, n: &FieldElement);
 
+    /// Multiply each element of the vector with a given field
+    /// element `n` to create a new vector
     fn scaled_by(&self, n: &FieldElement) -> Self;
 
     /// Add 2 vectors
@@ -520,6 +528,14 @@ macro_rules! impl_group_elem_vec_ops {
 
             fn append(&mut self, other: &mut Self) {
                 self.elems.append(&mut other.elems)
+            }
+
+            fn pop(&mut self) -> Option<$group_element> {
+                self.elems.pop()
+            }
+
+            fn remove(&mut self, index: usize) -> $group_element {
+                self.elems.remove(index)
             }
 
             fn sum(&self) -> $group_element {

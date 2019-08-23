@@ -9,8 +9,8 @@ use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
 use crate::errors::SerzDeserzError;
+use sha3::digest::{ExtendableOutput, Input, XofReader};
 use sha3::{Digest, Sha3_256, Shake256};
-use sha3::digest::{Input, ExtendableOutput, XofReader};
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {

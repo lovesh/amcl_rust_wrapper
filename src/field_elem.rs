@@ -753,14 +753,24 @@ impl FieldElementVector {
         self.elems.append(&mut other.elems)
     }
 
-    /// Multiply each field element of the vector with another given field
-    /// element `n` (scale the vector)
+    fn pop(&mut self) -> Option<FieldElement> {
+        self.elems.pop()
+    }
+
+    fn remove(&mut self, index: usize) -> FieldElement {
+        self.elems.remove(index)
+    }
+
+    /// Multiply each element of the vector with a given field
+    /// element `n` (scale the vector). Modifies the vector.
     pub fn scale(&mut self, n: &FieldElement) {
         for i in 0..self.len() {
             self[i] = self[i].multiply(n);
         }
     }
 
+    /// Multiply each element of the vector with a given field
+    /// element `n` to create a new vector
     pub fn scaled_by(&self, n: &FieldElement) -> Self {
         let mut scaled = Vec::<FieldElement>::with_capacity(self.len());
         for i in 0..self.len() {

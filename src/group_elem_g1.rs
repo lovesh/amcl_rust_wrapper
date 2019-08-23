@@ -12,8 +12,8 @@ use std::slice::Iter;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
-use zeroize::Zeroize;
 use std::str::{FromStr, SplitWhitespace};
+use zeroize::Zeroize;
 
 #[derive(Clone, Debug)]
 pub struct G1 {
