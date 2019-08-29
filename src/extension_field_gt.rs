@@ -21,6 +21,13 @@ impl fmt::Display for GT {
     }
 }
 
+impl fmt::Debug for GT {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut c = self.value.clone();
+        write!(f, "{}", c.tostring())
+    }
+}
+
 impl GT {
     pub fn new() -> Self {
         Self {
@@ -78,6 +85,17 @@ impl GT {
         }
     }
 
+    /// Return inverse of itself
+    pub fn inverse(&self) -> Self {
+        let mut inv = self.value.clone();
+        inv.inverse();
+        Self { value: inv }
+    }
+
+    pub fn inverse_mut(&mut self) {
+        self.value.inverse()
+    }
+
     pub fn is_one(&self) -> bool {
         return self.value.isunity();
     }
@@ -111,6 +129,21 @@ mod test {
     fn test_unity() {
         let one = GT::one();
         assert!(one.is_one());
+    }
+
+    #[test]
+    fn test_inverse() {
+        let minus_one = FieldElement::minus_one();
+        for _ in 0..10 {
+            let g1 = G1::random();
+            let g2 = G2::random();
+            let e = GT::ate_pairing(&g1, &g2);
+            let e_inv = e.inverse();
+            assert!(GT::mul(&e, &e_inv).is_one());
+
+            assert_eq!(GT::pow(&e, &minus_one), e_inv);
+            assert_eq!(GT::pow(&e_inv, &minus_one), e);
+        }
     }
 
     #[test]
@@ -203,10 +236,15 @@ mod test {
         let g1_neg = -&g1;
         let g2_neg = -&g2;
 
-        // e(g1, -g2) = e(-g1, g2)
+        // e(g1, -g2) == e(-g1, g2)
         let lhs = GT::ate_pairing(&g1, &g2_neg);
         let rhs = GT::ate_pairing(&g1_neg, &g2);
         assert!(lhs == rhs);
+
+        // e(g1, -g2) == e(-g1, g2) == e(g1, g2)^-1
+        let e = GT::ate_pairing(&g1, &g2);
+        let e_inv = e.inverse();
+        assert!(lhs == e_inv);
 
         let p = GT::ate_pairing(&g1, &g2);
 

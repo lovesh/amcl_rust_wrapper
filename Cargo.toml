@@ -1,6 +1,6 @@
 [package]
 name = "amcl_wrapper"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
 description = "Wapper over Milagro Cryptographic Library (version 3)"
 repository = "https://github.com/lovesh/amcl_rust_wrapper"
