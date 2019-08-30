@@ -36,4 +36,4 @@ lazy_static! {
 }
 
 #[cfg(any(feature = "bls381", feature = "bn254"))]
-pub use crate::types_g2::{GeneratorG2, GroupG2_SIZE};
+pub use crate::types_g2::{GeneratorG2, GroupG2_SIZE, GroupGT_SIZE};

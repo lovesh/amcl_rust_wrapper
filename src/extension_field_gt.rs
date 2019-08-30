@@ -8,6 +8,9 @@ use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
 use crate::group_elem_g2::G2;
 use std::fmt;
+use std::hash::{Hash, Hasher};
+use crate::errors::SerzDeserzError;
+use crate::constants::GroupGT_SIZE;
 
 #[derive(Clone)]
 pub struct GT {
@@ -111,6 +114,34 @@ impl GT {
     pub fn to_fp12(&self) -> FP12 {
         self.value.clone()
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut temp = FP12::new();
+        temp.copy(&self.value);
+        let mut bytes: [u8; GroupGT_SIZE] = [0; GroupGT_SIZE];
+        temp.tobytes(&mut bytes);
+        bytes.to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+        if bytes.len() != GroupGT_SIZE {
+            return Err(SerzDeserzError::GTBytesIncorrectSize(
+                bytes.len(),
+                GroupGT_SIZE,
+            ));
+        }
+        Ok(Self {
+            value: FP12::frombytes(bytes)
+        })
+    }
+
+    /// Return a random group element. Only for testing.
+    #[cfg(test)]
+    pub fn random() -> Self {
+        let g1 = G1::random();
+        let g2 = G2::random();
+        GT::ate_pairing(&g1, &g2)
+    }
 }
 
 impl PartialEq for GT {
@@ -118,6 +149,10 @@ impl PartialEq for GT {
         self.value.equals(&other.value)
     }
 }
+
+impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
+
+// TODO: Add zeroize and serialization using impl_group_elem_traits macro
 
 #[cfg(test)]
 mod test {

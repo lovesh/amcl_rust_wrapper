@@ -845,10 +845,12 @@ mod test {
     use super::*;
     use crate::constants::GroupG1_SIZE;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::constants::GroupG2_SIZE;
+    use crate::constants::{GroupG2_SIZE, GroupGT_SIZE};
     use crate::group_elem_g1::{G1LookupTable, G1Vector, G1};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::group_elem_g2::{G2LookupTable, G2Vector, G2};
+    #[cfg(any(feature = "bls381", feature = "bn254"))]
+    use crate::extension_field_gt::GT;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
 
@@ -881,6 +883,8 @@ mod test {
         to_and_fro_bytes!(G1, GroupG1_SIZE);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         to_and_fro_bytes!(G2, GroupG2_SIZE);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        to_and_fro_bytes!(GT, GroupGT_SIZE);
     }
 
     #[test]

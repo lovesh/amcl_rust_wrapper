@@ -44,6 +44,7 @@ pub mod types_g2;
 pub mod group_elem_g2;
 
 #[cfg(any(feature = "bls381", feature = "bn254"))]
+#[macro_use]
 pub mod extension_field_gt;
 
 extern crate serde;
