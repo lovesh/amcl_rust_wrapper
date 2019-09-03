@@ -116,7 +116,7 @@ impl GroupElement for G2 {
         value.setpx(x);
         value.setpy(y);
         value.setpz(z);
-        Ok(G2 { value })
+        Ok(Self { value })
     }
 
     fn negation(&self) -> Self {

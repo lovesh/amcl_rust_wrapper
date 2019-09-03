@@ -1,27 +1,25 @@
 use crate::types::GroupGT;
 
-use super::ECCurve::fp12::FP12;
+use super::ECCurve::fp12::{FP12, DENSE};
 use super::ECCurve::fp4::FP4;
 use super::ECCurve::pair::{another, ate, ate2, fexp, initmp, miller};
 use crate::field_elem::FieldElement;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
-use crate::group_elem_g2::G2;
+use crate::group_elem_g2::{G2, parse_hex_as_FP2};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use crate::errors::SerzDeserzError;
 use crate::constants::GroupGT_SIZE;
 
+use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
+use serde::ser::{Error as SError, Serialize, Serializer};
+use std::str::{FromStr, SplitWhitespace};
+use zeroize::Zeroize;
+
 #[derive(Clone)]
 pub struct GT {
     value: GroupGT,
-}
-
-impl fmt::Display for GT {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut c = self.value.clone();
-        write!(f, "{}", c.tostring())
-    }
 }
 
 impl fmt::Debug for GT {
@@ -135,6 +133,23 @@ impl GT {
         })
     }
 
+    pub fn to_hex(&self) -> String {
+        self.value.to_hex()
+    }
+
+    pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
+        let mut iter = s.split_whitespace();
+        let a = parse_hex_as_FP4(&mut iter)?;
+        let b = parse_hex_as_FP4(&mut iter)?;
+        let c = parse_hex_as_FP4(&mut iter)?;
+        let mut value = FP12::new();
+        value.seta(a);
+        value.setb(b);
+        value.setc(c);
+        value.settype(DENSE);
+        Ok(Self { value })
+    }
+
     /// Return a random group element. Only for testing.
     #[cfg(test)]
     pub fn random() -> Self {
@@ -142,6 +157,20 @@ impl GT {
         let g2 = G2::random();
         GT::ate_pairing(&g1, &g2)
     }
+}
+
+/// Parse given hex string as FP4
+pub fn parse_hex_as_FP4(iter: &mut SplitWhitespace) -> Result<FP4, SerzDeserzError> {
+    // Logic almost copied from AMCL but with error handling and constant time execution.
+    // Constant time is important as hex is used during serialization and deserialization.
+    // A seemingly effortless solution is to filter string for errors and pad with 0s before
+    // passing to AMCL but that would be expensive as the string is scanned twice
+    let a = parse_hex_as_FP2(iter)?;
+    let b = parse_hex_as_FP2(iter)?;
+    let mut fp4 = FP4::new();
+    fp4.seta(a);
+    fp4.setb(b);
+    Ok(fp4)
 }
 
 impl PartialEq for GT {
@@ -152,7 +181,7 @@ impl PartialEq for GT {
 
 impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
 
-// TODO: Add zeroize and serialization using impl_group_elem_traits macro
+impl_group_elem_traits!(GT, GroupGT);
 
 #[cfg(test)]
 mod test {

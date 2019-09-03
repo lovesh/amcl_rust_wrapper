@@ -136,7 +136,7 @@ macro_rules! impl_group_elem_traits {
 
         impl fmt::Display for $group_element {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                let c = self.value.clone();
+                let mut c = self.value.clone();
                 write!(f, "{}", c.tostring())
             }
         }
@@ -1048,6 +1048,8 @@ mod test {
         hex!(G1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         hex!(G2);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        hex!(GT);
     }
 
     #[test]
@@ -1075,6 +1077,8 @@ mod test {
         serz!(G1, S1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         serz!(G2, S2);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        serz!(GT, ST);
     }
 
     #[test]
