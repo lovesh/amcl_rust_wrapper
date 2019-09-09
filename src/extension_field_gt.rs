@@ -384,4 +384,57 @@ mod test {
         );
         assert!(accum == accum_multi);
     }
+
+    #[test]
+    fn timing_pairing_pow() {
+        // Compare cost of e(g1, g2)^r with e(g1^r, g2) and e(g1, g2^r)
+        let count = 10;
+        let g1_vec = (0..count).map(|_| G1::random()).collect::<Vec<G1>>();
+        let g2_vec = (0..count).map(|_| G2::random()).collect::<Vec<G2>>();
+        let r_vec = (0..count).map(|_| FieldElement::random()).collect::<Vec<FieldElement>>();
+
+        //e(g1, g2)^r
+        let mut pairing_exp = vec![];
+
+        // e(g1^r, g2)
+        let mut g1_exp = vec![];
+
+        // e(g1, g2^r)
+        let mut g2_exp = vec![];
+
+        let start = Instant::now();
+        for i in 0..count {
+            pairing_exp.push(GT::pow(&GT::ate_pairing(&g1_vec[i], &g2_vec[i]), &r_vec[i]));
+        }
+        println!(
+            "Time to compute {} pairing and then exponentiation is {:?}",
+            count,
+            start.elapsed()
+        );
+
+        let start = Instant::now();
+        for i in 0..count {
+            g1_exp.push(GT::ate_pairing(&(&g1_vec[i] * &r_vec[i]), &g2_vec[i]));
+        }
+        println!(
+            "Time to compute {} pairing after exponentiation in G1 is {:?}",
+            count,
+            start.elapsed()
+        );
+
+        let start = Instant::now();
+        for i in 0..count {
+            g2_exp.push(GT::ate_pairing(&g1_vec[i], &(&g2_vec[i] * &r_vec[i])));
+        }
+        println!(
+            "Time to compute {} pairing after exponentiation in G2 is {:?}",
+            count,
+            start.elapsed()
+        );
+
+        for i in 0..count {
+            assert_eq!(pairing_exp[i], g1_exp[i]);
+            assert_eq!(pairing_exp[i], g2_exp[i]);
+        }
+    }
 }
