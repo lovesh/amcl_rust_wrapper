@@ -136,6 +136,10 @@ impl FieldElement {
         v
     }
 
+    pub fn normalize(&mut self) {
+        self.value.norm();
+    }
+
     /// Hash an arbitrary sized message using SHAKE and return output as a field element
     pub fn from_msg_hash(msg: &[u8]) -> Self {
         // TODO: Ensure result is not 0
@@ -186,6 +190,13 @@ impl FieldElement {
     pub fn square(&self) -> Self {
         let d = BigNum::sqr(&self.value);
         Self::reduce_dmod_curve_order(&d).into()
+    }
+
+    /// Exponentiation modulo curve order, i.e. self^exp % CurveOrder
+    pub fn pow(&self, exp: &Self) -> Self {
+        let mut base = self.value.clone();
+        let res = base.powmod(&exp.value, &CurveOrder);
+        res.into()
     }
 
     /// Return negative of field element
@@ -757,6 +768,10 @@ impl FieldElementVector {
         self.elems.pop()
     }
 
+    pub fn insert(&mut self, index: usize, element: FieldElement) {
+        self.elems.insert(index, element)
+    }
+
     fn remove(&mut self, index: usize) -> FieldElement {
         self.elems.remove(index)
     }
@@ -950,6 +965,36 @@ mod test {
             let x = FieldElement::random();
             let x_inv = x.inverse();
             assert_eq!(x * x_inv, FieldElement::one())
+        }
+    }
+
+    #[test]
+    fn test_pow() {
+        for _ in 0..5 {
+            let base = FieldElement::random();
+
+            let base_sqr = base.square();
+            assert_eq!(base.pow(&FieldElement::from(2u64)), base_sqr);
+
+            let base_cube = &base_sqr * &base;
+            assert_eq!(base.pow(&FieldElement::from(3u64)), base_cube);
+
+            let base_4 = base_sqr.square();
+            assert_eq!(base.pow(&FieldElement::from(4u64)), base_4);
+
+            let base_5 = &base_4 * &base;
+            assert_eq!(base.pow(&FieldElement::from(5u64)), base_5);
+
+            /*// Check base^r1 * base^r2 = base^(r1 + r2)
+            let r1 = FieldElement::random();
+            let r2 = FieldElement::random();
+            let mut r3 = &r1 + &r2;
+            assert_eq!(&r1 + &r2, r3);
+            let x = &base.pow(&r1) * &base.pow(&r2);
+            r3.normalize();
+            let y = base.pow(&r3);
+            //assert_eq!(base.pow(&r1) * base.pow(&r2), base.pow(&(&r1 + &r2)));
+            assert_eq!(y, x);*/
         }
     }
 

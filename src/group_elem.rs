@@ -476,6 +476,8 @@ pub trait GroupElementVector<T>: Sized {
 
     fn pop(&mut self) -> Option<T>;
 
+    fn insert(&mut self, index: usize, element: T);
+
     fn remove(&mut self, index: usize) -> T;
 
     /// Compute sum of all elements of the vector
@@ -532,6 +534,10 @@ macro_rules! impl_group_elem_vec_ops {
 
             fn pop(&mut self) -> Option<$group_element> {
                 self.elems.pop()
+            }
+
+            fn insert(&mut self, index: usize, element: $group_element) {
+                self.elems.insert(index, element)
             }
 
             fn remove(&mut self, index: usize) -> $group_element {
