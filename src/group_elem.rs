@@ -24,7 +24,7 @@ pub trait GroupElement: Clone + Sized {
     /// Return the identity element
     fn identity() -> Self;
 
-    /// Return the group's generator
+    /// Return a group generator.
     fn generator() -> Self;
 
     /// Return a random group element

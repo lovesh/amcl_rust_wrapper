@@ -35,6 +35,7 @@ impl GroupElement for G2 {
         Self { value: v }
     }
 
+    /// This is an arbitrary choice. Any group element can be a generator
     fn generator() -> Self {
         GroupG2::generator().into()
     }

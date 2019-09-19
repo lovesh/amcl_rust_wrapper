@@ -1,10 +1,11 @@
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN};
+use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN, BigNumBits};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
 use amcl::rand::RAND;
+use amcl::arch::CHUNK;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -250,8 +251,9 @@ impl FieldElement {
         !self.is_even()
     }
 
-    /// Gives vectors of bit-vectors for the Big number. Each `Chunk` has a separate bit-vector,
-    /// hence upto NLEN bit-vectors possible. NOT SIDE CHANNEL RESISTANT
+    /// Gives vectors of bit-vectors for the Big number. Each limb has a separate bit-vector,
+    /// hence upto NLEN bit-vectors possible. Least significant bytes come first.
+    /// NOT SIDE CHANNEL RESISTANT
     pub fn to_bitvectors(&self) -> Vec<Vec<u8>> {
         let mut k = NLEN - 1;
         let mut s = BigNum::new_copy(&self.value);
@@ -275,6 +277,18 @@ impl FieldElement {
             b_vec[i] = c_vec;
         }
         return b_vec;
+    }
+
+    /// Returns bits. Least significant bits come first
+    pub fn to_bits(&self) -> Vec<u8> {
+        let mut bit_vecs = self.to_bitvectors();
+        let mut bits = vec![];
+        for mut bit_vec in bit_vecs.drain(..) {
+            let len = bit_vec.len();
+            bits.append(&mut bit_vec);
+            bits.append(&mut vec![0; BigNumBits - len]);
+        }
+        bits
     }
 
     /// Return a random non-zero field element using given random number generator
@@ -373,6 +387,16 @@ impl FieldElement {
             factor.fshl(n);
         }
         accum
+    }
+
+    /// Return n-th bit, n starts from 0
+    pub fn nth_bit(&self, n: usize) -> u8 {
+        self.value.bit(n) as u8
+    }
+
+    pub fn or(&mut self, other: &Self) {
+        self.value.or(&other.value);
+
     }
 
     /// Takes a bunch of field elements and returns the inverse of all field elements.
@@ -932,6 +956,7 @@ mod test {
     use serde_json;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+    use rand::Rng;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -995,6 +1020,69 @@ mod test {
             let y = base.pow(&r3);
             //assert_eq!(base.pow(&r1) * base.pow(&r2), base.pow(&(&r1 + &r2)));
             assert_eq!(y, x);*/
+        }
+    }
+
+    #[test]
+    fn test_nth_bit() {
+        assert_eq!(FieldElement::one().nth_bit(0), 1);
+        assert_eq!(FieldElement::one().nth_bit(1), 0);
+        assert_eq!(FieldElement::one().nth_bit(2), 0);
+
+        assert_eq!(FieldElement::from(2u64).nth_bit(0), 0);
+        assert_eq!(FieldElement::from(2u64).nth_bit(1), 1);
+        assert_eq!(FieldElement::from(2u64).nth_bit(2), 0);
+        assert_eq!(FieldElement::from(2u64).nth_bit(3), 0);
+
+        assert_eq!(FieldElement::from(3u64).nth_bit(0), 1);
+        assert_eq!(FieldElement::from(3u64).nth_bit(1), 1);
+        assert_eq!(FieldElement::from(3u64).nth_bit(2), 0);
+        assert_eq!(FieldElement::from(3u64).nth_bit(3), 0);
+
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..10 {
+            let r = FieldElement::random();
+            let bits = r.to_bits();
+            // Check bits at 100 random indices
+            for _ in 0..100 {
+                let idx = rng.gen_range(0, bits.len());
+                assert_eq!(r.nth_bit(idx), bits[idx]);
+            }
+        }
+    }
+
+    #[test]
+    fn test_or() {
+        let mut a = FieldElement::one();
+        let b = FieldElement::from(2);
+        a.or(&b);
+        assert_eq!(a, FieldElement::from(3));
+
+        let mut a = FieldElement::from(4);
+        a.or(&b);
+        assert_eq!(a, FieldElement::from(6));
+
+        let mut rng = rand::thread_rng();
+        for _ in 0..100 {
+            let r1 = FieldElement::random();
+            let r2 = FieldElement::random();
+            // r3 = r1 | r2
+            let mut r3 = r1.clone();
+            r3.or(&r2);
+
+            // Check that the OR operation was done correctly
+            let r1_bits = r1.to_bits();
+            let r2_bits = r2.to_bits();
+            let r3_bits = r3.to_bits();
+
+            let r1_len = r1_bits.len();
+            let r2_len = r2_bits.len();
+            for i in 0..r3_bits.len() {
+                let r1_bit = if i < r1_len {r1_bits[i]} else {0};
+                let r2_bit = if i < r2_len {r2_bits[i]} else {0};
+                assert_eq!(r3_bits[i], r1_bit | r2_bit);
+            }
         }
     }
 
@@ -1116,6 +1204,30 @@ mod test {
         assert_eq!(
             m.to_bitvectors(),
             vec![vec![0, 1], vec![0, 0, 1, 0, 0, 1, 1]]
+        );
+    }
+
+    #[test]
+    fn test_to_bits() {
+        let mut bits = vec![0, 1, 0, 1];
+        bits.append(&mut vec![0; BigNumBits-4]);
+        assert_eq!(FieldElement::from(10u32).to_bits(), bits);
+
+        let mut bits = vec![0, 0, 1, 0, 0, 1, 1];
+        bits.append(&mut vec![0; BigNumBits-7]);
+        assert_eq!(FieldElement::from(100u32).to_bits(), bits);
+
+        let mut c = vec![0i64; NLEN];
+        c[0] = 2;
+        c[1] = 100;
+        let m: FieldElement = BigNum::new_ints(&c).into();
+        let mut bits = vec![0, 1];
+        bits.append(&mut vec![0; BigNumBits-2]);
+        bits.append(&mut vec![0, 0, 1, 0, 0, 1, 1]);
+        bits.append(&mut vec![0; BigNumBits-7]);
+        assert_eq!(
+            m.to_bits(),
+            bits
         );
     }
 

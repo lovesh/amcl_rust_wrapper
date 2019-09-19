@@ -1,10 +1,11 @@
 use super::types::{BigNum, DoubleBigNum, GroupG1};
 
-use super::ECCurve::big::{MODBYTES as curve_MODBYTES, NLEN as curve_NLEN};
+use super::ECCurve::big::{MODBYTES as curve_MODBYTES, NLEN as curve_NLEN, BASEBITS};
 use super::ECCurve::rom;
 
 pub const MODBYTES: usize = curve_MODBYTES;
 pub const NLEN: usize = curve_NLEN;
+pub const BigNumBits: usize = BASEBITS;
 
 // Byte size of element in group G1, 1 extra byte for compression flag
 pub const GroupG1_SIZE: usize = (2 * MODBYTES + 1) as usize;
