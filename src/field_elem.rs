@@ -788,7 +788,7 @@ impl FieldElementVector {
         self.elems.append(&mut other.elems)
     }
 
-    fn pop(&mut self) -> Option<FieldElement> {
+    pub fn pop(&mut self) -> Option<FieldElement> {
         self.elems.pop()
     }
 
@@ -796,7 +796,7 @@ impl FieldElementVector {
         self.elems.insert(index, element)
     }
 
-    fn remove(&mut self, index: usize) -> FieldElement {
+    pub fn remove(&mut self, index: usize) -> FieldElement {
         self.elems.remove(index)
     }
 
