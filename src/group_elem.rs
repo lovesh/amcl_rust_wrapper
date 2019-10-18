@@ -911,6 +911,23 @@ mod test {
     }
 
     #[test]
+    fn test_equality() {
+        macro_rules! eql {
+            ( $group:ident ) => {
+                for _ in 0..10 {
+                    // Very unlikely that 2 randomly chosen elements will be equal
+                    let a = $group::random();
+                    let b = $group::random();
+                    assert_ne!(&a, &b);
+                }
+            }
+        }
+        eql!(G1);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        eql!(G2);
+    }
+
+    #[test]
     fn test_negating_group_elems() {
         macro_rules! negating {
             ( $group:ident ) => {{
@@ -951,13 +968,13 @@ mod test {
     fn test_group_elem_addition() {
         macro_rules! addition {
             ( $group:ident ) => {{
-                let a = G1::random();
-                let b = G1::random();
-                let c = G1::random();
+                let a = $group::random();
+                let b = $group::random();
+                let c = $group::random();
 
                 let sum = &a + &b + &c;
 
-                let mut expected_sum = G1::new();
+                let mut expected_sum = $group::new();
                 expected_sum = expected_sum.plus(&a);
                 expected_sum = expected_sum.plus(&b);
                 expected_sum = expected_sum.plus(&c);
@@ -974,7 +991,7 @@ mod test {
         macro_rules! neg {
             ( $group:ident ) => {
                 for i in 0..10 {
-                    let a = G1::random();
+                    let a = $group::random();
                     let b = a.negation();
                     assert!((a + b).is_identity())
                 }
@@ -1048,6 +1065,10 @@ mod test {
                     let h = r.to_hex();
                     let r_ = $group::from_hex(h).unwrap();
                     assert_eq!(r, r_);
+
+                    // Very unlikely that 2 randomly chosen elements will be equal
+                    let s = $group::random();
+                    assert_ne!(r, s);
                 }
             };
         }
@@ -1111,13 +1132,13 @@ mod test {
         macro_rules! wnaf_mul {
             ( $group:ident, $lookup_table:ident ) => {
                 for _ in 0..100 {
-                    let a = G1::random();
+                    let a = $group::random();
                     let r = FieldElement::random();
                     let expected = &a * &r;
 
-                    let table = G1LookupTable::from(&a);
+                    let table = $lookup_table::from(&a);
                     let wnaf = r.to_wnaf(5);
-                    let p = G1::wnaf_mul(&table, &wnaf);
+                    let p = $group::wnaf_mul(&table, &wnaf);
 
                     assert_eq!(expected, p);
                 }

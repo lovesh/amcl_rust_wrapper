@@ -963,10 +963,28 @@ mod test {
         let mut rng = rand::thread_rng();
         for _ in 0..100 {
             let x = FieldElement::random_using_rng(&mut rng);
-            let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
-            bytes.copy_from_slice(x.to_bytes().as_slice());
-            let y = FieldElement::from(&bytes);
-            assert_eq!(x, y)
+
+            let mut bytes_x: [u8; MODBYTES] = [0; MODBYTES];
+            bytes_x.copy_from_slice(x.to_bytes().as_slice());
+            let y = FieldElement::from(&bytes_x);
+            assert_eq!(x, y);
+
+            let z = FieldElement::from_bytes(&x.to_bytes()).unwrap();
+            assert_eq!(x, z);
+
+            let y1 = FieldElement::random_using_rng(&mut rng);
+            let z1 = FieldElement::from_bytes(&y1.to_bytes()).unwrap();
+            assert_ne!(x, z1);
+        }
+    }
+
+    #[test]
+    fn test_equality() {
+        for _ in 0..10 {
+            // Very unlikely that 2 randomly chosen elements will be equal
+            let a = FieldElement::random();
+            let b = FieldElement::random();
+            assert_ne!(&a, &b);
         }
     }
 
@@ -1340,8 +1358,12 @@ mod test {
         // If the element can be added to HashSet or HashMap, it must be hashable.
         let mut set = HashSet::new();
         let mut map = HashMap::new();
-        set.insert(FieldElement::random());
-        map.insert(FieldElement::random(), FieldElement::random());
+        let x = FieldElement::random();
+        set.insert(x.clone());
+        let y = FieldElement::random();
+        map.insert(y.clone(), FieldElement::random());
+        assert!(set.contains(&x));
+        assert!(map.contains_key(&y));
     }
 
     #[test]
@@ -1477,7 +1499,7 @@ mod test {
         }
         println!("Square time for {} elems = {:?}", count, start.elapsed());
         for i in 0..count {
-            assert!(r1[i] == r2[i])
+            assert_eq!(r1[i], r2[i])
         }
 
         let start = Instant::now();
@@ -1528,6 +1550,10 @@ mod test {
             let h = r.to_hex();
             let r_ = FieldElement::from_hex(h).unwrap();
             assert_eq!(r, r_);
+
+            // Very unlikely that 2 randomly chosen elements will be equal
+            let s = FieldElement::random();
+            assert_ne!(r, s);
         }
     }
 
