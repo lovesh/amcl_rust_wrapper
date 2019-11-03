@@ -1,11 +1,13 @@
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, CurveOrder, MODBYTES, NLEN, BigNumBits};
+use crate::constants::{
+    BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, BigNumBits, CurveOrder, MODBYTES, NLEN,
+};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
-use amcl::rand::RAND;
 use amcl::arch::CHUNK;
+use amcl::rand::RAND;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -396,7 +398,6 @@ impl FieldElement {
 
     pub fn or(&mut self, other: &Self) {
         self.value.or(&other.value);
-
     }
 
     /// Takes a bunch of field elements and returns the inverse of all field elements.
@@ -953,10 +954,10 @@ pub fn multiply_row_vector_with_matrix(
 mod test {
     use super::*;
     use amcl::bls381::big::BIG;
+    use rand::Rng;
     use serde_json;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
-    use rand::Rng;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -1081,7 +1082,6 @@ mod test {
         a.or(&b);
         assert_eq!(a, FieldElement::from(6));
 
-        let mut rng = rand::thread_rng();
         for _ in 0..100 {
             let r1 = FieldElement::random();
             let r2 = FieldElement::random();
@@ -1097,8 +1097,8 @@ mod test {
             let r1_len = r1_bits.len();
             let r2_len = r2_bits.len();
             for i in 0..r3_bits.len() {
-                let r1_bit = if i < r1_len {r1_bits[i]} else {0};
-                let r2_bit = if i < r2_len {r2_bits[i]} else {0};
+                let r1_bit = if i < r1_len { r1_bits[i] } else { 0 };
+                let r2_bit = if i < r2_len { r2_bits[i] } else { 0 };
                 assert_eq!(r3_bits[i], r1_bit | r2_bit);
             }
         }
@@ -1228,11 +1228,11 @@ mod test {
     #[test]
     fn test_to_bits() {
         let mut bits = vec![0, 1, 0, 1];
-        bits.append(&mut vec![0; BigNumBits-4]);
+        bits.append(&mut vec![0; BigNumBits - 4]);
         assert_eq!(FieldElement::from(10u32).to_bits(), bits);
 
         let mut bits = vec![0, 0, 1, 0, 0, 1, 1];
-        bits.append(&mut vec![0; BigNumBits-7]);
+        bits.append(&mut vec![0; BigNumBits - 7]);
         assert_eq!(FieldElement::from(100u32).to_bits(), bits);
 
         let mut c = vec![0i64; NLEN];
@@ -1240,13 +1240,10 @@ mod test {
         c[1] = 100;
         let m: FieldElement = BigNum::new_ints(&c).into();
         let mut bits = vec![0, 1];
-        bits.append(&mut vec![0; BigNumBits-2]);
+        bits.append(&mut vec![0; BigNumBits - 2]);
         bits.append(&mut vec![0, 0, 1, 0, 0, 1, 1]);
-        bits.append(&mut vec![0; BigNumBits-7]);
-        assert_eq!(
-            m.to_bits(),
-            bits
-        );
+        bits.append(&mut vec![0; BigNumBits - 7]);
+        assert_eq!(m.to_bits(), bits);
     }
 
     #[test]

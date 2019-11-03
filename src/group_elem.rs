@@ -498,6 +498,8 @@ pub trait GroupElementVector<T>: Sized {
     fn minus(&self, b: &Self) -> Result<Self, ValueError>;
 
     fn iter(&self) -> Iter<T>;
+
+    fn random(size: usize) -> Self;
 }
 
 #[macro_export]
@@ -586,6 +588,13 @@ macro_rules! impl_group_elem_vec_ops {
 
             fn iter(&self) -> Iter<$group_element> {
                 self.as_slice().iter()
+            }
+
+            fn random(size: usize) -> Self {
+                (0..size)
+                    .map(|_| $group_element::random())
+                    .collect::<Vec<$group_element>>()
+                    .into()
             }
         }
     };
@@ -852,11 +861,11 @@ mod test {
     use crate::constants::GroupG1_SIZE;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::constants::{GroupG2_SIZE, GroupGT_SIZE};
+    #[cfg(any(feature = "bls381", feature = "bn254"))]
+    use crate::extension_field_gt::GT;
     use crate::group_elem_g1::{G1LookupTable, G1Vector, G1};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::group_elem_g2::{G2LookupTable, G2Vector, G2};
-    #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::extension_field_gt::GT;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
 
@@ -920,7 +929,7 @@ mod test {
                     let b = $group::random();
                     assert_ne!(&a, &b);
                 }
-            }
+            };
         }
         eql!(G1);
         #[cfg(any(feature = "bls381", feature = "bn254"))]

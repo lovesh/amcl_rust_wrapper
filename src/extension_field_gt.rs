@@ -1,16 +1,17 @@
 use crate::types::GroupGT;
 
-use super::ECCurve::fp12::{FP12, DENSE};
+use super::ECCurve::fp12::{DENSE, FP12};
 use super::ECCurve::fp4::FP4;
 use super::ECCurve::pair::{another, ate, ate2, fexp, initmp, miller};
+use crate::constants::GroupGT_SIZE;
+use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
-use crate::group_elem_g2::{G2, parse_hex_as_FP2};
+use crate::group_elem_g2::{parse_hex_as_FP2, G2};
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use crate::errors::SerzDeserzError;
-use crate::constants::GroupGT_SIZE;
+use std::ops::Mul;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
@@ -74,7 +75,22 @@ impl GT {
         Self { value: fexp(&e) }
     }
 
-    pub fn mul(a: &Self, b: &Self) -> Self {
+    /// Inner product of 2 vectors in group G1 and G2.
+    /// Equivalent to a multi-pairing
+    pub fn inner_product(left: &[G1], right: &[G2]) -> Result<Self, ValueError> {
+        check_vector_size_for_equality!(left, right)?;
+        let mut accum = initmp();
+        for (g1, g2) in left.iter().zip(right) {
+            if g1.is_identity() || g2.is_identity() {
+                continue;
+            }
+            another(&mut accum, &g2.to_ecp(), &g1.to_ecp());
+        }
+        let e = miller(&accum);
+        Ok(Self { value: fexp(&e) })
+    }
+
+    pub fn product(a: &Self, b: &Self) -> Self {
         let mut m = FP12::new_copy(&a.value);
         m.mul(&b.value);
         Self { value: m }
@@ -129,7 +145,7 @@ impl GT {
             ));
         }
         Ok(Self {
-            value: FP12::frombytes(bytes)
+            value: FP12::frombytes(bytes),
         })
     }
 
@@ -183,6 +199,38 @@ impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
 
 impl_group_elem_traits!(GT, GroupGT);
 
+impl Mul<GT> for GT {
+    type Output = Self;
+
+    fn mul(self, other: GT) -> Self {
+        GT::product(&self, &other)
+    }
+}
+
+impl Mul<&GT> for GT {
+    type Output = Self;
+
+    fn mul(self, other: &GT) -> Self {
+        GT::product(&self, other)
+    }
+}
+
+impl Mul<GT> for &GT {
+    type Output = GT;
+
+    fn mul(self, other: GT) -> GT {
+        GT::product(&self, &other)
+    }
+}
+
+impl Mul<&GT> for &GT {
+    type Output = GT;
+
+    fn mul(self, other: &GT) -> GT {
+        GT::product(self, other)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -203,7 +251,7 @@ mod test {
             let g2 = G2::random();
             let e = GT::ate_pairing(&g1, &g2);
             let e_inv = e.inverse();
-            assert!(GT::mul(&e, &e_inv).is_one());
+            assert!(GT::product(&e, &e_inv).is_one());
 
             assert_eq!(GT::pow(&e, &minus_one), e_inv);
             assert_eq!(GT::pow(&e_inv, &minus_one), e);
@@ -219,7 +267,7 @@ mod test {
 
         // e(g1 + identity, g2) == e(g1, g2)*e(identity, g2)
         let lhs = GT::ate_pairing(&(&g1 + &g1_identity), &g2);
-        let rhs = GT::mul(
+        let rhs = GT::product(
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1_identity, &g2),
         );
@@ -227,7 +275,7 @@ mod test {
 
         // e(g1, g2 + identity) == e(g1, g2)*e(g1, identity)
         let lhs = GT::ate_pairing(&g1, &(&g2 + &g2_identity));
-        let rhs = GT::mul(
+        let rhs = GT::product(
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1, &g2_identity),
         );
@@ -237,7 +285,7 @@ mod test {
         let h2 = G2::random();
 
         // e(g1, g2)*e(identity, h2) == e(g1, g2)
-        let lhs = GT::mul(
+        let lhs = GT::product(
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1_identity, &h2),
         );
@@ -245,7 +293,7 @@ mod test {
         assert!(lhs == rhs);
 
         // e(identity, g2)*e(h1, h2) == e(h1, h2)
-        let lhs = GT::mul(
+        let lhs = GT::product(
             &GT::ate_pairing(&g1_identity, &g2),
             &GT::ate_pairing(&h1, &h2),
         );
@@ -313,10 +361,23 @@ mod test {
         let p = GT::ate_pairing(&g1, &g2);
 
         // e(g1, g2) = e(-g1, g2)^-1 => e(g1, g2) * e(-g1, g2) == 1
-        assert!(GT::mul(&p, &lhs) == GT::one());
+        assert!(GT::product(&p, &lhs) == GT::one());
 
         // e(g1, g2) = e(g1, -g2)^-1 => e(g1, g2) * e(g1, -g2) == 1
-        assert!(GT::mul(&p, &rhs) == GT::one());
+        assert!(GT::product(&p, &rhs) == GT::one());
+    }
+
+    #[test]
+    fn test_ate_pairing_product() {
+        let g1 = G1::random();
+        let g2 = G2::random();
+        let h1 = G1::random();
+        let h2 = G2::random();
+        let r1 = GT::ate_pairing(&g1, &g2);
+        let r2 = GT::ate_pairing(&h1, &h2);
+        let r3 = GT::product(&r1, &r2);
+        let r4 = r1 * r2;
+        assert_eq!(r3, r4);
     }
 
     #[test]
@@ -328,21 +389,33 @@ mod test {
 
         // e(g1 + h1, g2) == e(g1, g2)*e(h1, g2)
         let lhs = GT::ate_pairing(&(&g1 + &h1), &g2);
-        let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&h1, &g2));
+        let rhs = GT::product(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&h1, &g2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &h1, &g2);
         let rhs_2 = GT::ate_multi_pairing(vec![(&g1, &g2), (&h1, &g2)]);
-        assert!(lhs == rhs);
-        assert!(rhs_1 == rhs);
-        assert!(rhs_2 == rhs);
+        let rhs_3 = GT::inner_product(
+            vec![g1.clone(), h1.clone()].as_slice(),
+            vec![g2.clone(), g2.clone()].as_slice(),
+        )
+        .unwrap();
+        assert_eq!(lhs, rhs);
+        assert_eq!(rhs_1, rhs);
+        assert_eq!(rhs_2, rhs);
+        assert_eq!(rhs_3, rhs);
 
         // e(g1, g2+h2) == e(g1, g2)*e(g1, h2)
         let lhs = GT::ate_pairing(&g1, &(&g2 + &h2));
-        let rhs = GT::mul(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&g1, &h2));
+        let rhs = GT::product(&GT::ate_pairing(&g1, &g2), &GT::ate_pairing(&g1, &h2));
         let rhs_1 = GT::ate_2_pairing(&g1, &g2, &g1, &h2);
         let rhs_2 = GT::ate_multi_pairing(vec![(&g1, &g2), (&g1, &h2)]);
-        assert!(lhs == rhs);
-        assert!(rhs_1 == rhs);
-        assert!(rhs_2 == rhs);
+        let rhs_3 = GT::inner_product(
+            vec![g1.clone(), g1.clone()].as_slice(),
+            vec![g2.clone(), h2.clone()].as_slice(),
+        )
+        .unwrap();
+        assert_eq!(lhs, rhs);
+        assert_eq!(rhs_1, rhs);
+        assert_eq!(rhs_2, rhs);
+        assert_eq!(rhs_3, rhs);
 
         let r = FieldElement::random();
         // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
@@ -350,8 +423,8 @@ mod test {
         let p2 = GT::ate_pairing(&(&g1 * &r), &g2);
         let mut p = GT::ate_pairing(&g1, &g2);
         p = p.pow(&r);
-        assert!(p1 == p2);
-        assert!(p1 == p);
+        assert_eq!(p1, p2);
+        assert_eq!(p1, p);
     }
 
     #[test]
@@ -366,7 +439,7 @@ mod test {
         tuple_vec.push((&g1_vec[0], &g2_vec[0]));
         for i in 1..count {
             let e = GT::ate_pairing(&g1_vec[i], &g2_vec[i]);
-            accum = GT::mul(&accum, &e);
+            accum = GT::product(&accum, &e);
             tuple_vec.push((&g1_vec[i], &g2_vec[i]));
         }
         println!(
@@ -376,13 +449,16 @@ mod test {
         );
 
         let start = Instant::now();
-        let accum_multi = GT::ate_multi_pairing(tuple_vec);
+        let multi = GT::ate_multi_pairing(tuple_vec);
         println!(
             "Time to compute {} pairings using multi-pairings is {:?}",
             count,
             start.elapsed()
         );
-        assert!(accum == accum_multi);
+        assert!(accum == multi);
+
+        let ip = GT::inner_product(&g1_vec, &g2_vec).unwrap();
+        assert!(accum == ip);
     }
 
     #[test]
@@ -391,7 +467,9 @@ mod test {
         let count = 10;
         let g1_vec = (0..count).map(|_| G1::random()).collect::<Vec<G1>>();
         let g2_vec = (0..count).map(|_| G2::random()).collect::<Vec<G2>>();
-        let r_vec = (0..count).map(|_| FieldElement::random()).collect::<Vec<FieldElement>>();
+        let r_vec = (0..count)
+            .map(|_| FieldElement::random())
+            .collect::<Vec<FieldElement>>();
 
         //e(g1, g2)^r
         let mut pairing_exp = vec![];

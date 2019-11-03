@@ -173,6 +173,16 @@ impl_group_elem_vec_product_ops!(G2, G2Vector, G2LookupTable);
 
 impl_group_elem_vec_conversions!(G2, G2Vector);
 
+impl G2 {
+    /// Computes sum of 2 scalar multiplications.
+    /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
+    /// returns self*a + h*b
+    pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
+        // TODO: Replace with faster
+        G2Vector::inner_product_var_time_with_ref_vecs(vec![&self, h], vec![a, b]).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
