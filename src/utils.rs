@@ -1,7 +1,6 @@
 extern crate rand;
 extern crate sha3;
 
-use rand::rngs::EntropyRng;
 use rand::{CryptoRng, RngCore};
 
 use crate::constants::{CurveOrder, MODBYTES};
@@ -10,7 +9,7 @@ use amcl::rand::RAND;
 
 use crate::errors::SerzDeserzError;
 use sha3::digest::{ExtendableOutput, Input, XofReader};
-use sha3::{Digest, Sha3_256, Shake256};
+use sha3::{Sha3_256, Shake256};
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
@@ -30,7 +29,7 @@ pub fn get_seeded_RNG_with_rng<R: RngCore + CryptoRng>(entropy_size: usize, rng:
 
 pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
     let mut entropy = vec![0; entropy_size];
-    let mut rng = EntropyRng::new();
+    let mut rng = rand::thread_rng();
     rng.fill_bytes(&mut entropy.as_mut_slice());
     get_RAND(entropy_size, entropy.as_slice())
 }
@@ -167,7 +166,6 @@ mod test {
     use crate::group_elem_g1::G1;
     use crate::utils::rand::Rng;
     use crate::ECCurve::big::BIG;
-    use crate::ECCurve::dbig::DBIG;
     use crate::ECCurve::ecp::ECP;
     use crate::ECCurve::fp::FP;
     use std::time::{Duration, Instant};
