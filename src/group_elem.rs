@@ -555,12 +555,16 @@ macro_rules! impl_group_elem_vec_ops {
             }
 
             fn scale(&mut self, n: &FieldElement) {
+                // TODO: Since each element is multiplied with same field element, use the
+                // optimized version.
                 for i in 0..self.len() {
                     self[i] = &self[i] * n;
                 }
             }
 
             fn scaled_by(&self, n: &FieldElement) -> Self {
+                // TODO: Since each element is multiplied with same field element, use the
+                // optimized version.
                 let mut scaled = Self::with_capacity(self.len());
                 for i in 0..self.len() {
                     scaled.push(&self[i] * n)
@@ -796,6 +800,28 @@ macro_rules! impl_group_elem_vec_product_ops {
                     }
                 }
                 Ok(r)
+            }
+
+            /// Non-constant time operation. Scale this group element vector by a factor. Each group
+            /// element is multiplied by the same factor so wnaf is computed only once.
+            pub fn scale_var_time(&mut self, n: &FieldElement) {
+                let wnaf = n.to_wnaf(5);
+                for i in 0..self.len() {
+                    let table = $lookup_table::from(&self[i]);
+                    self[i] = $group_element::wnaf_mul(&table, &wnaf);
+                }
+            }
+
+            /// Non-constant time operation. Return a scaled vector. Each group
+            /// element is multiplied by the same factor so wnaf is computed only once.
+            pub fn scaled_by_var_time(&self, n: &FieldElement) -> Self {
+                let wnaf = n.to_wnaf(5);
+                let mut scaled = Self::with_capacity(self.len());
+                for i in 0..self.len() {
+                    let table = $lookup_table::from(&self[i]);
+                    scaled.push($group_element::wnaf_mul(&table, &wnaf))
+                }
+                scaled
             }
         }
     };
@@ -1197,5 +1223,31 @@ mod test {
         mul_scal_mul!(G1, G1Vector);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         mul_scal_mul!(G2, G2Vector);
+    }
+
+    #[test]
+    fn timing_vector_scaling() {
+        let size = 20;
+        macro_rules! scale {
+            ( $group_vec:ident ) => {
+                let r = FieldElement::random();
+                let vector = $group_vec::random(size);
+                let start = Instant::now();
+                let s1 = vector.scaled_by(&r);
+                println!("Constant time scaling for {} elems takes {:?}", size, start.elapsed());
+
+                let start = Instant::now();
+                let s2 = vector.scaled_by_var_time(&r);
+                println!("Variable time scaling for {} elems takes {:?}", size, start.elapsed());
+
+                assert_eq!(s1, s2);
+                let mut s3 = vector.clone();
+                s3.scale_var_time(&r);
+                assert_eq!(s1, s3)
+            }
+        }
+        scale!(G1Vector);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        scale!(G2Vector);
     }
 }
