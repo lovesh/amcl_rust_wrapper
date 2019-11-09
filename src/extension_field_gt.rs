@@ -149,6 +149,29 @@ impl GT {
         })
     }
 
+    /// Writes bytes to given slice. Raises exception when given slice is not of
+    /// desired length.
+    pub fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
+        if target.len() != GroupGT_SIZE {
+            return Err(SerzDeserzError::GTBytesIncorrectSize(
+                target.len(),
+                GroupGT_SIZE,
+            ));
+        }
+        let mut temp = FP12::new();
+        temp.copy(&self.value);
+        temp.tobytes(target);
+        Ok(())
+    }
+
+    /// Writes bytes to given slice. Will panic when given slice is not of
+    /// desired length.
+    pub fn write_to_slice_unchecked(&self, target: &mut [u8]) {
+        let mut temp = FP12::new();
+        temp.copy(&self.value);
+        temp.tobytes(target);
+    }
+
     pub fn to_hex(&self) -> String {
         self.value.to_hex()
     }

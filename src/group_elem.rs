@@ -48,9 +48,17 @@ pub trait GroupElement: Clone + Sized {
     /// Hash an arbitrary sized message using SHAKE and return output as group element
     fn from_msg_hash(msg: &[u8]) -> Self;
 
+    /// Return byte representation as vector
     fn to_bytes(&self) -> Vec<u8>;
 
+    /// Create an element from a byte representation
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError>;
+
+    /// Writes bytes to given slice. Raises exception when given slice is not of desired length.
+    fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError>;
+
+    /// Writes bytes to given slice. Will panic when given slice is not of desired length.
+    fn write_to_slice_unchecked(&self, target: &mut [u8]);
 
     /// Add a group element to itself. `self = self + b`
     fn add_assign_(&mut self, b: &Self);
@@ -119,6 +127,8 @@ macro_rules! impl_group_elem_conversions {
 
         impl Hash for $group_element {
             fn hash<H: Hasher>(&self, state: &mut H) {
+                let mut bytes: [u8; $group_size] = [0; $group_size];
+                self.write_to_slice_unchecked(&mut bytes);
                 state.write(&self.to_bytes())
             }
         }
@@ -903,7 +913,7 @@ mod test {
                 for _ in 0..count {
                     let x = $group::random();
                     let mut bytes: [u8; $group_size] = [0; $group_size];
-                    bytes.copy_from_slice(x.to_bytes().as_slice());
+                    x.write_to_slice(&mut bytes).unwrap();
                     let y = $group::from(&bytes);
                     assert_eq!(x, y);
 
@@ -913,10 +923,12 @@ mod test {
                     // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
                     let mut bytes2 = bytes1.clone();
                     bytes2.push(0);
-                    assert!($group::from_bytes(bytes2.as_slice()).is_err());
+                    assert!($group::from_bytes(&bytes2).is_err());
+                    assert!(x.write_to_slice(&mut bytes2).is_err());
 
                     // Decrease length of byte vector
-                    assert!($group::from_bytes(&bytes1[0..$group_size - 1]).is_err());
+                    assert!($group::from_bytes(&bytes2[0..$group_size - 4]).is_err());
+                    assert!(x.write_to_slice(&mut bytes2[0..$group_size - 4]).is_err());
                 }
             };
         }
@@ -1025,7 +1037,7 @@ mod test {
     fn test_negation() {
         macro_rules! neg {
             ( $group:ident ) => {
-                for i in 0..10 {
+                for _ in 0..10 {
                     let a = $group::random();
                     let b = a.negation();
                     assert!((a + b).is_identity())
@@ -1234,17 +1246,25 @@ mod test {
                 let vector = $group_vec::random(size);
                 let start = Instant::now();
                 let s1 = vector.scaled_by(&r);
-                println!("Constant time scaling for {} elems takes {:?}", size, start.elapsed());
+                println!(
+                    "Constant time scaling for {} elems takes {:?}",
+                    size,
+                    start.elapsed()
+                );
 
                 let start = Instant::now();
                 let s2 = vector.scaled_by_var_time(&r);
-                println!("Variable time scaling for {} elems takes {:?}", size, start.elapsed());
+                println!(
+                    "Variable time scaling for {} elems takes {:?}",
+                    size,
+                    start.elapsed()
+                );
 
                 assert_eq!(s1, s2);
                 let mut s3 = vector.clone();
                 s3.scale_var_time(&r);
                 assert_eq!(s1, s3)
-            }
+            };
         }
         scale!(G1Vector);
         #[cfg(any(feature = "bls381", feature = "bn254"))]

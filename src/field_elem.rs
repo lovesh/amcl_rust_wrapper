@@ -1,7 +1,7 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::constants::{
-    BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, BigNumBits, CurveOrder, MODBYTES, NLEN,
+    BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, BigNumBits, CurveOrder, FieldElement_SIZE, NLEN,
 };
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum, Limb};
@@ -45,7 +45,9 @@ impl fmt::Display for FieldElement {
 
 impl Hash for FieldElement {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(&self.to_bytes())
+        let mut bytes: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+        self.write_to_slice_unchecked(&mut bytes);
+        state.write(&bytes)
     }
 }
 
@@ -114,23 +116,42 @@ impl FieldElement {
 
     /// Return bytes in MSB form
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut temp = BigNum::new_copy(&self.value);
-        let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
-        temp.tobytes(&mut bytes);
+        let mut bytes: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+        self.write_to_slice_unchecked(&mut bytes);
         bytes.to_vec()
     }
 
     /// Expects bytes in MSB form
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != MODBYTES {
+        if bytes.len() != FieldElement_SIZE {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 bytes.len(),
-                MODBYTES,
+                FieldElement_SIZE,
             ));
         }
         let mut n = BigNum::frombytes(bytes);
         n.rmod(&CurveOrder);
         Ok(Self { value: n })
+    }
+
+    /// Writes bytes in MSB form to given slice. Raises exception when given slice is not of
+    /// desired length.
+    pub fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
+        if target.len() != FieldElement_SIZE {
+            return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
+                target.len(),
+                FieldElement_SIZE,
+            ));
+        }
+        self.write_to_slice_unchecked(target);
+        Ok(())
+    }
+
+    /// Writes bytes in MSB form to given slice. Will panic when given slice is not of
+    /// desired length.
+    pub fn write_to_slice_unchecked(&self, target: &mut [u8]) {
+        let mut temp = BigNum::new_copy(&self.value);
+        temp.tobytes(target);
     }
 
     pub fn to_bignum(&self) -> BigNum {
@@ -461,15 +482,15 @@ impl FieldElement {
 
         let mut val = val;
         // Given hex cannot be bigger than max byte size
-        if val.len() > MODBYTES * 2 {
+        if val.len() > FieldElement_SIZE * 2 {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 val.len(),
-                MODBYTES,
+                FieldElement_SIZE,
             ));
         }
 
         // Pad the string for constant time parsing.
-        while val.len() < MODBYTES * 2 {
+        while val.len() < FieldElement_SIZE * 2 {
             val.insert(0, '0');
         }
 
@@ -560,8 +581,8 @@ impl From<BigNum> for FieldElement {
     }
 }
 
-impl From<&[u8; MODBYTES]> for FieldElement {
-    fn from(x: &[u8; MODBYTES]) -> Self {
+impl From<&[u8; FieldElement_SIZE]> for FieldElement {
+    fn from(x: &[u8; FieldElement_SIZE]) -> Self {
         let mut n = BigNum::frombytes(x);
         n.rmod(&CurveOrder);
         Self { value: n }
@@ -965,8 +986,8 @@ mod test {
         for _ in 0..100 {
             let x = FieldElement::random_using_rng(&mut rng);
 
-            let mut bytes_x: [u8; MODBYTES] = [0; MODBYTES];
-            bytes_x.copy_from_slice(x.to_bytes().as_slice());
+            let mut bytes_x: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+            x.write_to_slice(&mut bytes_x).unwrap();
             let y = FieldElement::from(&bytes_x);
             assert_eq!(x, y);
 
@@ -1514,7 +1535,7 @@ mod test {
 
     #[test]
     fn test_parse_hex_as_bignum() {
-        for i in 0..100 {
+        for _ in 0..100 {
             let b = FieldElement::random().to_bignum();
             let h = b.clone().to_hex();
             let b1 = FieldElement::parse_hex_as_bignum(h.clone()).unwrap();
@@ -1530,13 +1551,13 @@ mod test {
         let mut h = r1.to_hex();
         // Make hex string bigger
         h.insert(0, '0');
-        assert!(h.len() > MODBYTES * 2);
+        assert!(h.len() > FieldElement_SIZE * 2);
         assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
 
         let mut h = r1.to_hex();
         // Add non hex character
         h = h.replacen("0", "G", 1);
-        assert_eq!(h.len(), MODBYTES * 2);
+        assert_eq!(h.len(), FieldElement_SIZE * 2);
         assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
     }
 
