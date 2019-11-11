@@ -53,10 +53,8 @@ impl GroupElement for G2 {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut temp = GroupG2::new();
-        temp.copy(&self.value);
         let mut bytes: [u8; GroupG2_SIZE] = [0; GroupG2_SIZE];
-        temp.tobytes(&mut bytes);
+        self.write_to_slice_unchecked(&mut bytes);
         bytes.to_vec()
     }
 
@@ -68,6 +66,23 @@ impl GroupElement for G2 {
             ));
         }
         Ok(GroupG2::frombytes(bytes).into())
+    }
+
+    fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
+        if target.len() != GroupG2_SIZE {
+            return Err(SerzDeserzError::G2BytesIncorrectSize(
+                target.len(),
+                GroupG2_SIZE,
+            ));
+        }
+        self.write_to_slice_unchecked(target);
+        Ok(())
+    }
+
+    fn write_to_slice_unchecked(&self, target: &mut [u8]) {
+        let mut temp = GroupG2::new();
+        temp.copy(&self.value);
+        temp.tobytes(target);
     }
 
     fn add_assign_(&mut self, b: &Self) {

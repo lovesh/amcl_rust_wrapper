@@ -3,7 +3,7 @@ extern crate sha3;
 
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{CurveOrder, MODBYTES};
+use crate::constants::{CurveOrder, FieldElement_SIZE};
 use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
@@ -12,10 +12,10 @@ use sha3::digest::{ExtendableOutput, Input, XofReader};
 use sha3::{Sha3_256, Shake256};
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
-pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
+pub fn hash_msg(msg: &[u8]) -> [u8; FieldElement_SIZE] {
     let mut hasher = Shake256::default();
     hasher.input(&msg);
-    let mut h: [u8; MODBYTES] = [0; MODBYTES];
+    let mut h: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
     hasher.xof_result().read(&mut h);
     h
 }
