@@ -1013,19 +1013,22 @@ mod test {
 
     #[test]
     fn test_group_elem_addition() {
+        let count = 10;
         macro_rules! addition {
             ( $group:ident ) => {{
-                let a = $group::random();
-                let b = $group::random();
-                let c = $group::random();
+                for _ in 0..count {
+                    let a = $group::random();
+                    let b = $group::random();
+                    let c = $group::random();
 
-                let sum = &a + &b + &c;
+                    let sum = &a + &b + &c;
 
-                let mut expected_sum = $group::new();
-                expected_sum = expected_sum.plus(&a);
-                expected_sum = expected_sum.plus(&b);
-                expected_sum = expected_sum.plus(&c);
-                assert_eq!(sum, expected_sum);
+                    let mut expected_sum = $group::new();
+                    expected_sum = expected_sum.plus(&a);
+                    expected_sum = expected_sum.plus(&b);
+                    expected_sum = expected_sum.plus(&c);
+                    assert_eq!(sum, expected_sum);
+                }
             }};
         }
         addition!(G1);
