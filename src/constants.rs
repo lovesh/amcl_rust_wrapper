@@ -10,8 +10,11 @@ pub const BigNumBits: usize = BASEBITS;
 // Byte size of element in group G1, 1 extra byte for compression flag
 pub const FieldElement_SIZE: usize = MODBYTES;
 
-// Byte size of element in group G1, 1 extra byte for compression flag
+// Byte size of uncompressed element in group G1, 1 extra byte for compression flag
 pub const GroupG1_SIZE: usize = (2 * MODBYTES + 1) as usize;
+
+// Byte size of compressed element in group G1, 1 extra byte for compression flag
+pub const GroupG1_COMP_SIZE: usize = (MODBYTES + 1) as usize;
 
 lazy_static! {
     pub static ref GeneratorG1: GroupG1 = GroupG1::generator();

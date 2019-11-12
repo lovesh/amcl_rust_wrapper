@@ -82,7 +82,7 @@ impl GroupElement for G2 {
     fn write_to_slice_unchecked(&self, target: &mut [u8]) {
         let mut temp = GroupG2::new();
         temp.copy(&self.value);
-        temp.tobytes(target);
+        temp.tobytes(target, false);
     }
 
     fn add_assign_(&mut self, b: &Self) {

@@ -54,6 +54,9 @@ pub trait GroupElement: Clone + Sized {
     /// Create an element from a byte representation
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError>;
 
+    // TODO: Add to_compressed(&self) -> Vec<u8>
+    // TODO: Update write_to_slice and write_to_slice_unchecked to accept flag to compress or not.
+
     /// Writes bytes to given slice. Raises exception when given slice is not of desired length.
     fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError>;
 
