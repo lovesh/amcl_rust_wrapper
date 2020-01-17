@@ -33,5 +33,5 @@ pub fn commit_to_field_element_vectors(
     combined_f.extend_from_slice(b.as_slice());
     combined_f.push(c.clone());
 
-    G1Vector::from(combined_g).inner_product_const_time(&FieldElementVector::from(combined_f))
+    G1Vector::from(combined_g).inner_product_const_time(&combined_f)
 }

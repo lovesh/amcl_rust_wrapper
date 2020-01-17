@@ -4,7 +4,7 @@ use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
 use crate::types::{GroupG1, FP};
 use crate::utils::hash_msg;
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -213,6 +213,7 @@ mod test {
     use super::*;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+    use std::borrow::Borrow;
 
     #[test]
     fn test_parse_hex_for_FP() {
@@ -266,7 +267,7 @@ mod test {
         let const_time_naive = start.elapsed();
 
         start = Instant::now();
-        let res_1 = gv.multi_scalar_mul_var_time(&fv).unwrap();
+        let res_1 = gv.multi_scalar_mul_var_time(fv.iter()).unwrap();
         let var_time = start.elapsed();
 
         assert_eq!(res_1, res);
@@ -287,7 +288,7 @@ mod test {
         assert_eq!(res_2, res);
 
         start = Instant::now();
-        let res_3 = gv.multi_scalar_mul_const_time(&fv).unwrap();
+        let res_3 = gv.multi_scalar_mul_const_time(fv.as_ref()).unwrap();
         let const_time = start.elapsed();
 
         assert_eq!(res_3, res);
@@ -301,7 +302,7 @@ mod test {
         start = Instant::now();
         let res_4 = G1Vector::multi_scalar_mul_const_time_with_precomputation_done(
             &group_elem_multiples,
-            &fv,
+            fv.as_slice(),
         )
         .unwrap();
         let const_precomp_time = start.elapsed();

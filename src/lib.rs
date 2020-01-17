@@ -35,6 +35,7 @@ pub mod group_elem;
 #[macro_use]
 pub mod group_elem_g1;
 pub mod commitment;
+pub mod univar_poly;
 
 #[cfg(any(feature = "bls381", feature = "bn254"))]
 pub mod types_g2;

@@ -4,7 +4,8 @@ use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
 use crate::types::{GroupG2, FP2};
 use crate::utils::hash_msg;
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
+use std::iter;
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -194,7 +195,9 @@ impl G2 {
     /// returns self*a + h*b
     pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
         // TODO: Replace with faster
-        G2Vector::inner_product_var_time_with_ref_vecs(vec![&self, h], vec![a, b]).unwrap()
+        let group_elems = iter::once(self).chain(iter::once(h));
+        let field_elems = iter::once(a).chain(iter::once(b));
+        G2Vector::multi_scalar_mul_const_time_without_precomputation(group_elems, field_elems).unwrap()
     }
 }
 

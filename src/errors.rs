@@ -7,7 +7,7 @@ pub enum ValueError {
     IncorrectSize(usize),
     NonPowerOf2(usize),
     OutOfRange(usize),
-    NegativeValue(BigNum),
+    NegativeValue(BigNum)
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -917,6 +917,18 @@ impl From<&[FieldElement]> for FieldElementVector {
     }
 }
 
+impl Into<Vec<FieldElement>> for FieldElementVector {
+    fn into(self) -> Vec<FieldElement> {
+        self.elems
+    }
+}
+
+impl<'a> Into<&'a [FieldElement]> for &'a FieldElementVector {
+    fn into(self) -> &'a [FieldElement] {
+        &self.elems
+    }
+}
+
 impl Index<usize> for FieldElementVector {
     type Output = FieldElement;
 
@@ -951,6 +963,12 @@ impl IntoIterator for FieldElementVector {
 
     fn into_iter(self) -> Self::IntoIter {
         self.elems.into_iter()
+    }
+}
+
+impl AsRef<[FieldElement]> for FieldElementVector {
+    fn as_ref(&self) -> &[FieldElement] {
+        self.elems.as_slice()
     }
 }
 

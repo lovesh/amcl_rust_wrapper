@@ -290,6 +290,18 @@ macro_rules! impl_group_elem_ops {
             }
         }
 
+        impl SubAssign for $group_element {
+            fn sub_assign(&mut self, other: Self) {
+                self.sub_assign_(&other)
+            }
+        }
+
+        impl<'a> SubAssign<&'a $group_element> for $group_element {
+            fn sub_assign(&mut self, other: &'a $group_element) {
+                self.sub_assign_(other)
+            }
+        }
+
         impl Mul<FieldElement> for $group_element {
             type Output = Self;
 
@@ -619,20 +631,21 @@ macro_rules! impl_group_elem_vec_product_ops {
         impl $group_element_vec {
             /// Computes inner product of 2 vectors, one of field elements and other of group elements.
             /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
-            pub fn inner_product_const_time(
-                &self,
-                b: &FieldElementVector,
+            pub fn inner_product_const_time<'g, 'f>(
+                &'g self,
+                b: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
                 self.multi_scalar_mul_const_time(b)
             }
 
-            pub fn inner_product_var_time(
-                &self,
-                b: &FieldElementVector,
+            pub fn inner_product_var_time<'g, 'f>(
+                &'g self,
+                b: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
                 self.multi_scalar_mul_var_time(b)
             }
 
+            #[deprecated(since = "0.3.0", note = "Please use the `inner_product_var_time` function instead")]
             pub fn inner_product_var_time_with_ref_vecs(
                 group_elems: Vec<&$group_element>,
                 field_elems: Vec<&FieldElement>,
@@ -672,30 +685,27 @@ macro_rules! impl_group_elem_vec_product_ops {
             }
 
             /// Constant time multi-scalar multiplication
-            pub fn multi_scalar_mul_const_time(
-                &self,
-                field_elems: &FieldElementVector,
+            pub fn multi_scalar_mul_const_time<'g, 'f>(
+                &'g self,
+                field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                Self::_multi_scalar_mul_const_time(&self, field_elems)
+                Self::multi_scalar_mul_const_time_without_precomputation(self.as_slice(), field_elems)
             }
 
             /// Variable time multi-scalar multiplication
-            pub fn multi_scalar_mul_var_time(
-                &self,
-                field_elems: &FieldElementVector,
+            pub fn multi_scalar_mul_var_time<'g, 'f>(
+                &'g self,
+                field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                let fs: Vec<&FieldElement> = field_elems.iter().map(|f| f).collect();
-                Self::_multi_scalar_mul_var_time(&self, fs)
+                Self::multi_scalar_mul_var_time_without_precomputation(self.as_slice(), field_elems)
             }
 
             /// Strauss multi-scalar multiplication
-            fn _multi_scalar_mul_var_time(
-                group_elems: &$group_element_vec,
-                field_elems: Vec<&FieldElement>,
+            fn multi_scalar_mul_var_time_without_precomputation<'g, 'f>(
+                group_elems: impl IntoIterator<Item = &'g $group_element>,
+                field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                check_vector_size_for_equality!(field_elems, group_elems)?;
                 let lookup_tables: Vec<_> = group_elems
-                    .as_slice()
                     .into_iter()
                     .map(|e| $lookup_table::from(e))
                     .collect();
@@ -706,11 +716,11 @@ macro_rules! impl_group_elem_vec_product_ops {
                 )
             }
 
+            #[deprecated(since = "0.3.0", note = "Please use the `multi_scalar_mul_var_time_without_precomputation` function instead")]
             pub fn multi_scalar_mul_var_time_from_ref_vecs(
                 group_elems: Vec<&$group_element>,
                 field_elems: Vec<&FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                check_vector_size_for_equality!(field_elems, group_elems)?;
                 let lookup_tables: Vec<_> = group_elems
                     .iter()
                     .map(|e| $lookup_table::from(*e))
@@ -723,14 +733,13 @@ macro_rules! impl_group_elem_vec_product_ops {
             }
 
             /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
-            pub fn multi_scalar_mul_var_time_with_precomputation_done(
+            pub fn multi_scalar_mul_var_time_with_precomputation_done<'f>(
                 lookup_tables: &[$lookup_table],
-                field_elems: Vec<&FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                // Redundant check when called from multi_scalar_mul_var_time
-                check_vector_size_for_equality!(field_elems, lookup_tables)?;
+                let mut nafs: Vec<_> = field_elems.into_iter().map(|e| e.to_wnaf(5)).collect();
 
-                let mut nafs: Vec<_> = field_elems.iter().map(|e| e.to_wnaf(5)).collect();
+                check_vector_size_for_equality!(nafs, lookup_tables)?;
 
                 // Pad the NAFs with 0 so that all nafs are of same length
                 let new_length = pad_collection!(nafs, 0);
@@ -756,15 +765,13 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Constant time multi-scalar multiplication.
             /// Taken from Guide to Elliptic Curve Cryptography book, "Algorithm 3.48 Simultaneous multiple point multiplication" without precomputing the addition
             /// Still helps with reducing doublings
-            pub(crate) fn _multi_scalar_mul_const_time(
-                group_elems: &$group_element_vec,
-                field_elems: &FieldElementVector,
+            pub fn multi_scalar_mul_const_time_without_precomputation<'g, 'f>(
+                group_elems: impl IntoIterator<Item = &'g $group_element>,
+                field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                check_vector_size_for_equality!(field_elems, group_elems)?;
 
                 // Choosing window of size 3.
                 let group_elem_multiples: Vec<_> = group_elems
-                    .as_slice()
                     .into_iter()
                     .map(|e| e.get_multiples(7)) // 2^3 - 1
                     .collect();
@@ -775,20 +782,18 @@ macro_rules! impl_group_elem_vec_product_ops {
                 )
             }
 
-            pub fn multi_scalar_mul_const_time_with_precomputation_done(
-                group_elem_multiples: &Vec<Vec<$group_element>>,
-                field_elems: &FieldElementVector,
+            pub fn multi_scalar_mul_const_time_with_precomputation_done<'f>(
+                group_elem_multiples: &[Vec<$group_element>],
+                field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                // Redundant check when called from multi_scalar_mul_const_time
-                check_vector_size_for_equality!(group_elem_multiples, field_elems)?;
-
                 // TODO: The test shows that precomputing multiples does not help much. Experiment with bigger window.
 
                 let mut field_elems_base_repr: Vec<_> = field_elems
-                    .as_slice()
                     .into_iter()
                     .map(|e| e.to_power_of_2_base(3))
                     .collect();
+
+                check_vector_size_for_equality!(group_elem_multiples, field_elems_base_repr)?;
 
                 // Pad the representations with 0 so that all are of same length
                 let new_length = pad_collection!(field_elems_base_repr, 0);
@@ -825,12 +830,8 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Non-constant time operation. Return a scaled vector. Each group
             /// element is multiplied by the same factor so wnaf is computed only once.
             pub fn scaled_by_var_time(&self, n: &FieldElement) -> Self {
-                let wnaf = n.to_wnaf(5);
-                let mut scaled = Self::with_capacity(self.len());
-                for i in 0..self.len() {
-                    let table = $lookup_table::from(&self[i]);
-                    scaled.push($group_element::wnaf_mul(&table, &wnaf))
-                }
+                let mut scaled: Self = self.clone();
+                scaled.scale_var_time(n);
                 scaled
             }
         }
@@ -849,6 +850,18 @@ macro_rules! impl_group_elem_vec_conversions {
         impl From<&[$group_element]> for $group_element_vec {
             fn from(x: &[$group_element]) -> Self {
                 Self { elems: x.to_vec() }
+            }
+        }
+
+        impl Into<Vec<$group_element>> for $group_element_vec {
+            fn into(self) -> Vec<$group_element> {
+                self.elems
+            }
+        }
+
+        impl<'a> Into<&'a [$group_element]> for &'a $group_element_vec {
+            fn into(self) -> &'a [$group_element] {
+                &self.elems
             }
         }
 
@@ -886,6 +899,12 @@ macro_rules! impl_group_elem_vec_conversions {
 
             fn into_iter(self) -> Self::IntoIter {
                 self.elems.into_iter()
+            }
+        }
+
+        impl AsRef<[$group_element]> for $group_element_vec {
+            fn as_ref(&self) -> &[$group_element] {
+                self.elems.as_slice()
             }
         }
     };
@@ -1217,7 +1236,7 @@ mod test {
                     let fv = FieldElementVector::from(fs.as_slice());
                     let res = gv.multi_scalar_mul_const_time_naive(&fv).unwrap();
 
-                    let res_1 = gv.multi_scalar_mul_var_time(&fv).unwrap();
+                    let res_1 = gv.multi_scalar_mul_var_time(fv.as_ref()).unwrap();
 
                     let mut expected = $group::new();
                     let mut expected_1 = $group::new();
@@ -1226,12 +1245,15 @@ mod test {
                         expected_1.add_assign_(&(&gs[i] * &fs[i]));
                     }
 
-                    let res_2 = $vector::_multi_scalar_mul_const_time(&gv, &fv).unwrap();
+                    let res_2 = $vector::multi_scalar_mul_const_time_without_precomputation(gs.as_slice(), fs.as_slice()).unwrap();
 
                     assert_eq!(expected, res);
                     assert_eq!(expected_1, res);
                     assert_eq!(res_1, res);
                     assert_eq!(res_2, res);
+
+                    let res_3 = $vector::multi_scalar_mul_const_time_without_precomputation(gv.as_ref(), fv.as_ref()).unwrap();
+                    assert_eq!(res_3, res);
                 }
             };
         }
@@ -1242,7 +1264,7 @@ mod test {
 
     #[test]
     fn timing_vector_scaling() {
-        let size = 20;
+        let size = 30;
         macro_rules! scale {
             ( $group_vec:ident ) => {
                 let r = FieldElement::random();
