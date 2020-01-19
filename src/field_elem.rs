@@ -11,13 +11,15 @@ use amcl::rand::RAND;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign, RangeBounds};
 use std::slice::Iter;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 
 use zeroize::Zeroize;
+use rayon::prelude::*;
+use crate::rayon::iter::IntoParallelRefMutIterator;
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -756,7 +758,7 @@ impl FieldElementVector {
     /// Creates a new field element vector with each element being 0
     pub fn new(size: usize) -> Self {
         Self {
-            elems: (0..size).map(|_| FieldElement::new()).collect(),
+            elems: (0..size).into_par_iter().map(|_| FieldElement::new()).collect(),
         }
     }
 
@@ -788,14 +790,18 @@ impl FieldElementVector {
 
     /// Get a vector of random field elements
     pub fn random(size: usize) -> Self {
-        (0..size)
+        (0..size).into_par_iter()
             .map(|_| FieldElement::random())
             .collect::<Vec<FieldElement>>()
             .into()
     }
 
     pub fn as_slice(&self) -> &[FieldElement] {
-        &self.elems
+        self.elems.as_slice()
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [FieldElement] {
+        self.elems.as_mut_slice()
     }
 
     pub fn len(&self) -> usize {
@@ -825,48 +831,42 @@ impl FieldElementVector {
     /// Multiply each element of the vector with a given field
     /// element `n` (scale the vector). Modifies the vector.
     pub fn scale(&mut self, n: &FieldElement) {
-        for i in 0..self.len() {
-            self[i] = self[i].multiply(n);
-        }
+        self.elems.as_mut_slice().par_iter_mut().for_each(|e| {
+            *e = e.multiply(n);
+        })
     }
 
     /// Multiply each element of the vector with a given field
     /// element `n` to create a new vector
     pub fn scaled_by(&self, n: &FieldElement) -> Self {
-        let mut scaled = Vec::<FieldElement>::with_capacity(self.len());
-        for i in 0..self.len() {
-            scaled.push(&self[i] * n)
-        }
+        let mut scaled = self.clone();
+        scaled.scale(n);
         scaled.into()
     }
 
     /// Add 2 vectors of field elements
     pub fn plus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let mut sum_vector = FieldElementVector::with_capacity(self.len());
-        for i in 0..self.len() {
-            sum_vector.push(&self[i] + &b.elems[i])
-        }
+        let mut sum_vector = Self::new(self.len());
+        sum_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+            *e = &self[i] + &b[i]
+        });
         Ok(sum_vector)
     }
 
     /// Subtract 2 vectors of field elements
     pub fn minus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let mut diff_vector = FieldElementVector::with_capacity(self.len());
-        for i in 0..self.len() {
-            diff_vector.push(&self[i] - &b[i])
-        }
+        let mut diff_vector = Self::new(self.len());
+        diff_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+            *e = &self[i] - &b[i]
+        });
         Ok(diff_vector)
     }
 
     /// Compute sum of all elements of a vector
     pub fn sum(&self) -> FieldElement {
-        let mut accum = FieldElement::new();
-        for i in 0..self.len() {
-            accum += &self[i];
-        }
-        accum
+        self.as_slice().par_iter().cloned().reduce(|| FieldElement::new(), |a, b| a + b)
     }
 
     /// Computes inner product of 2 vectors of field elements
@@ -888,16 +888,22 @@ impl FieldElementVector {
         b: &FieldElementVector,
     ) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let mut hadamard_product = FieldElementVector::with_capacity(self.len());
-        for i in 0..self.len() {
-            hadamard_product.push(&self[i] * &b[i]);
-        }
+        let mut hadamard_product = Self::new(self.len());
+        hadamard_product.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+            *e = &self[i] * &b[i]
+        });
         Ok(hadamard_product)
     }
 
     pub fn split_at(&self, mid: usize) -> (Self, Self) {
         let (l, r) = self.as_slice().split_at(mid);
         (Self::from(l), Self::from(r))
+    }
+
+    /// Replace a range `R` of the vector with `I`. Same as Vector's splice except it does not return
+    /// anything. Only available to this crate for now for some manipulations in Polynomial
+    pub(crate) fn splice<R, I>(&mut self, range: R, replace_with: I) where R: RangeBounds<usize>, I: IntoIterator<Item=FieldElement> {
+        self.elems.splice(range, replace_with);
     }
 
     pub fn iter(&self) -> Iter<FieldElement> {

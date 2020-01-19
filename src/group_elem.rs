@@ -4,6 +4,8 @@ use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 
 use std::slice::Iter;
+use rayon::prelude::*;
+use crate::rayon::iter::IntoParallelRefMutIterator;
 
 #[macro_export]
 macro_rules! add_group_elems {
@@ -490,6 +492,8 @@ pub trait GroupElementVector<T>: Sized {
 
     fn as_slice(&self) -> &[T];
 
+    fn as_mut_slice(&mut self) -> &mut [T];
+
     fn len(&self) -> usize;
 
     fn push(&mut self, value: T);
@@ -530,7 +534,7 @@ macro_rules! impl_group_elem_vec_ops {
         impl GroupElementVector<$group_element> for $group_element_vec {
             fn new(size: usize) -> Self {
                 Self {
-                    elems: (0..size).map(|_| $group_element::new()).collect(),
+                    elems: (0..size).into_par_iter().map(|_| $group_element::new()).collect(),
                 }
             }
 
@@ -542,6 +546,10 @@ macro_rules! impl_group_elem_vec_ops {
 
             fn as_slice(&self) -> &[$group_element] {
                 &self.elems
+            }
+
+            fn as_mut_slice(&mut self) -> &mut [$group_element] {
+                &mut self.elems
             }
 
             fn len(&self) -> usize {
@@ -569,11 +577,7 @@ macro_rules! impl_group_elem_vec_ops {
             }
 
             fn sum(&self) -> $group_element {
-                let mut accum = $group_element::new();
-                for i in 0..self.len() {
-                    accum += &self[i];
-                }
-                accum
+                self.as_slice().par_iter().cloned().reduce(|| $group_element::new(), |a, b| a + b)
             }
 
             fn scale(&mut self, n: &FieldElement) {
@@ -596,19 +600,19 @@ macro_rules! impl_group_elem_vec_ops {
 
             fn plus(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
-                let mut sum_vector = Self::with_capacity(self.len());
-                for i in 0..self.len() {
-                    sum_vector.push(&self[i] + &b.elems[i])
-                }
+                let mut sum_vector = Self::new(self.len());
+                sum_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+                    *e = &self[i] + &b[i]
+                });
                 Ok(sum_vector)
             }
 
             fn minus(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
-                let mut diff_vector = Self::with_capacity(self.len());
-                for i in 0..self.len() {
-                    diff_vector.push(&self[i] - &b[i])
-                }
+                let mut diff_vector = Self::new(self.len());
+                diff_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+                    *e = &self[i] - &b[i]
+                });
                 Ok(diff_vector)
             }
 
@@ -617,7 +621,7 @@ macro_rules! impl_group_elem_vec_ops {
             }
 
             fn random(size: usize) -> Self {
-                (0..size)
+                (0..size).into_par_iter()
                     .map(|_| $group_element::random())
                     .collect::<Vec<$group_element>>()
                     .into()
@@ -658,10 +662,10 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Here `o` denotes group operation, which in elliptic curve is point addition
             pub fn hadamard_product(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
-                let mut hadamard_product = Self::with_capacity(self.len());
-                for i in 0..self.len() {
-                    hadamard_product.push(&self[i] + &b[i]);
-                }
+                let mut hadamard_product = Self::new(self.len());
+                hadamard_product.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+                    *e = &self[i] + &b[i]
+                });
                 Ok(hadamard_product)
             }
 
@@ -821,10 +825,10 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// element is multiplied by the same factor so wnaf is computed only once.
             pub fn scale_var_time(&mut self, n: &FieldElement) {
                 let wnaf = n.to_wnaf(5);
-                for i in 0..self.len() {
-                    let table = $lookup_table::from(&self[i]);
-                    self[i] = $group_element::wnaf_mul(&table, &wnaf);
-                }
+                self.elems.as_mut_slice().par_iter_mut().for_each(|e| {
+                    let table = $lookup_table::from(&(*e));
+                    *e = $group_element::wnaf_mul(&table, &wnaf);
+                })
             }
 
             /// Non-constant time operation. Return a scaled vector. Each group

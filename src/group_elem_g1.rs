@@ -14,6 +14,8 @@ use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};
 use zeroize::Zeroize;
+use rayon::prelude::*;
+use crate::rayon::iter::IntoParallelRefMutIterator;
 
 #[derive(Clone, Debug)]
 pub struct G1 {

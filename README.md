@@ -2,9 +2,11 @@
 
 - Wraps some parts of [AMCL](https://github.com/miracl/amcl) to provide a nice abstraction to work with finite field elements and group elements when working with elliptic curves.   
 - Overloads +, -, *, +=, -= to use with field as well as group elements.  The overloaded operators correspond to constant time methods. But for scalar multiplication, variable time algorithms are present but can be used by calling methods only. 
-- Provides abstraction for creating vectors of field elements or group elements and then scale, add, subtract, take inner product or Hadamard product.
+- Provides abstraction for creating vectors of field elements or group (elliptic curve points) elements and then scale, add, subtract, take inner product or Hadamard product.
+- Supports creating univariate polynomials of field elements and doing arithmetic on them.
+- Some of the operations on vectors and polynomials are parallelized using [rayon](https://github.com/rayon-rs/rayon).
 - Serialization support using [serde](https://github.com/serde-rs/json).
-- Field and group elements are cleared when dropped. Using [clear_on_drop](https://github.com/cesarb/clear_on_drop).     
+- Field and group elements are cleared when dropped. Using [zeroize](https://crates.io/crates/zeroize).     
 - Additionally, implements some extra algorithms like variable time scalar multiplication using wNAF, constant time and variable time multi-scalar multiplication, batch (simultaneous) inversion and Barrett reduction.
 
 ## Building
@@ -256,3 +258,30 @@ let x_recon = G1::from_hex(hex_repr).unwrap();    // Constant time conversion
 let hex_repr = y.to_hex();
 let y_recon = G2::from_hex(hex_repr).unwrap();    // Constant time conversion
 ```
+
+7. Univariate polynomials
+```rust
+// Create a univariate zero polynomial of degree `d`, i.e. the polynomial will be 0 + 0*x + 0*x^2 + 0*x^3 + ... + 0*x^d 
+let poly = UnivarPolynomial::new(d);
+assert!(poly.is_zero());
+
+// Create a polynomial from field elements as coefficients, the following polynomial will be c_0 + c_1*x + c_2*x^2 + c_3*x^3 + ... + c_d*x^d
+let coeffs: Vec<FieldElement> = vec![c_0, c_1, ... coefficients for smaller to higher degrees ..., c_d];
+let poly1 = UnivarPolynomial(FieldElementVector::from(coeffs));
+
+// Create a polynomial of degree `d` with random coefficients 
+let poly2 = UnivarPolynomial::random(d);
+
+// Create a polynomial from its roots  
+let poly3 = UnivarPolynomial::new_with_roots(roots);
+
+// A polynomial can be evaluated at a field element `v` 
+let res: FieldElement = poly1.eval(v);
+
+// Polynomials can be added, subtracted, multiplied or divided to give new polynomials
+let sum = UnivarPolynomial::sum(&poly1, &poly2);
+let diff = UnivarPolynomial::difference(&poly1, &poly2);
+let product = UnivarPolynomial::multiply(&poly1, &poly2);
+let (quotient, rem) = UnivarPolynomial::long_division(&poly1, &poly2);
+```
+

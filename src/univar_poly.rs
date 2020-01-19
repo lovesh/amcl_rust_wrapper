@@ -2,6 +2,8 @@ use std::ops::{Index, IndexMut};
 
 use crate::field_elem::{FieldElement, FieldElementVector};
 use std::cmp::max;
+use rayon::prelude::*;
+use crate::rayon::iter::IntoParallelRefIterator;
 
 /// Univariate polynomial represented with coefficients in a vector. The ith element of the vector is the coefficient of the ith degree term.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -13,6 +15,38 @@ impl UnivarPolynomial {
         let coeffs = FieldElementVector::new(degree + 1);
         UnivarPolynomial(coeffs)
     }
+
+    /// Return a constant polynomial
+    pub fn new_constant(constant: FieldElement) -> Self {
+        let mut coeffs = FieldElementVector::new(1);
+        coeffs[0] = constant;
+        UnivarPolynomial(coeffs)
+    }
+
+    /// Return a randomly chosen polynomial (each coefficient is randomly chosen) of degree `degree`.
+    pub fn random(degree: usize) -> Self {
+        Self(FieldElementVector::random(degree + 1)) // +1 for constant term
+    }
+
+    /// Create a polynomial with given roots in `roots`
+    /// i.e. (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last]) given `roots`
+    pub fn new_with_roots(roots: &[FieldElement]) -> Self {
+        // vector of [(x-roots[0]), (x-roots[1]), (x-roots[2]), ...]
+        let x_i = roots
+            .par_iter()
+            .map(|i| {
+                let mut v = FieldElementVector::with_capacity(2);
+                v.push(-i);
+                v.push(FieldElement::one());
+                UnivarPolynomial(v)
+            })
+            .collect::<Vec<UnivarPolynomial>>();
+
+        // Polynomial (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last])
+        x_i.par_iter().cloned().reduce(|| Self::new_constant(FieldElement::one()), |a, b| UnivarPolynomial::multiply(&a, &b))
+    }
+
+    // TODO: Add method new_with_coefficients
 
     pub fn degree(&self) -> usize {
         // TODO: This makes fetching the coefficient ambiguous as a 0 degree polynomial might
@@ -61,7 +95,6 @@ impl UnivarPolynomial {
         let highest_degree_coeff_inv = divisor[divisor.degree()].inverse();
         let rem_degree = dividend.degree();
         let div_degree = divisor.degree();
-        //let quo_degree = dividend.degree() - div_degree;
         for i in (div_degree..=rem_degree).rev() {
             if remainder[i].is_zero() {
                 quotient.push(FieldElement::zero());
@@ -74,8 +107,6 @@ impl UnivarPolynomial {
             }
             quotient.push(q);
         }
-        // Remove trailing 0s since the quotient has degree `quo_degree`
-        //quotient.drain(quo_degree + 1..);
         // The coefficients of the quotient polynomial were computed from highest to lowest degree.
         quotient.reverse();
         // Remainder's degree will be less than divisor's degree.
@@ -98,22 +129,21 @@ impl UnivarPolynomial {
 
     /// Return sum of 2 polynomials. `left` + `right`
     pub fn sum(left: &Self, right: &Self) -> Self {
-        let (sum_poly_degree, bigger_poly, smaller_poly) = if left.degree() > right.degree() {
-            (left.degree(), left, right)
+        // The resulting sum polynomial is initialized with the input polynomial of larger degree
+        let (mut sum_poly, smaller_poly, smaller_poly_degree) = if left.degree() > right.degree() {
+            (left.clone(), right, right.degree())
         } else {
-            (right.degree(), right, left)
+            (right.clone(), left, left.degree())
         };
-        let mut sum = Self::new(sum_poly_degree);
-        let smaller_poly_degree = smaller_poly.degree();
-        for i in 0..=sum_poly_degree {
-            // A cleaner approach would be to avoid creating `bigger_poly` and `smaller_poly` and
-            // have 2 `if`s inside the loop but that will be less efficient
-            sum[i] = bigger_poly[i].clone();
-            if i <= smaller_poly_degree {
-                sum[i] += &smaller_poly[i];
-            }
-        }
-        sum
+
+        // The following unobvious code is to use rayon for parallelization. A simpler (non-parallel)
+        // version would be  `for i in 0..=smaller_poly_degree { sum_poly[i] += &smaller_poly[i]; }`
+
+        // Add small degree ([0, smaller_poly_degree]) terms in parallel
+        let small_degree_terms = (0..=smaller_poly_degree).into_par_iter().map(|i| &sum_poly[i] + &smaller_poly[i]).collect::<Vec<FieldElement>>();
+        // Replace small degree ([0, smaller_poly_degree]) terms in the sum_poly
+        sum_poly.replace_small_degree_terms(smaller_poly_degree, small_degree_terms.into_iter());
+        sum_poly
     }
 
     /// Return difference of 2 polynomials. `left` - `right`
@@ -133,31 +163,10 @@ impl UnivarPolynomial {
         diff
     }
 
-    /// Return a randomly chosen polynomial (each coefficient is randomly chosen) of degree `degree`.
-    pub fn random(degree: usize) -> Self {
-        Self(FieldElementVector::random(degree + 1)) // +1 for constant term
-    }
-
-    /// Create a polynomial with given roots in `roots`
-    /// i.e. (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last]) given `roots`
-    pub fn from_given_roots(roots: &[FieldElement]) -> UnivarPolynomial {
-        // vector of [(x-roots[0]), (x-roots[1]), (x-roots[2]), ...]
-        let x_i = roots
-            .iter()
-            .map(|i| {
-                let mut v = FieldElementVector::with_capacity(2);
-                v.push(-i);
-                v.push(FieldElement::one());
-                UnivarPolynomial(v)
-            })
-            .collect::<Vec<UnivarPolynomial>>();
-
-        // Polynomial (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last])
-        let mut poly = x_i[0].clone();
-        for i in 1..roots.len() {
-            poly = UnivarPolynomial::multiply(&poly, &x_i[i]);
-        }
-        poly
+    /// Replace terms of `self` from degree 0 to `till_degree` with coefficients in `replace_with`.
+    /// Assumes `replace_with` will yield at least `till_degree` + 1 coefficients
+    fn replace_small_degree_terms<I: IntoIterator<Item=FieldElement>>(&mut self, till_degree: usize, replace_with: I) {
+        self.0.splice(0..=till_degree, replace_with)
     }
 }
 
@@ -179,6 +188,7 @@ impl IndexMut<usize> for UnivarPolynomial {
 mod tests {
     use super::*;
     use rand::Rng;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_poly() {
@@ -188,6 +198,15 @@ mod tests {
 
         let poly2 = UnivarPolynomial(FieldElementVector::new(degree + 1));
         assert!(poly2.is_zero());
+
+        let poly3 = UnivarPolynomial::new(degree);
+        assert!(poly3.is_zero());
+
+        let poly4 = UnivarPolynomial::new_constant(FieldElement::from(100u64));
+        assert!(!poly4.is_zero());
+        assert_eq!(poly4.degree(), 0);
+        assert_eq!(poly4[0], FieldElement::from(100u64));
+
     }
 
     #[test]
@@ -434,6 +453,7 @@ mod tests {
         // Test sum and difference of randomly generated polynomials.
         let num_test_cases = 100;
         let mut rng = rand::thread_rng();
+        let mut start = Instant::now();
         for _ in 0..num_test_cases {
             let left = UnivarPolynomial::random(rng.gen_range(1, 100));
             let right = UnivarPolynomial::random(rng.gen_range(1, 100));
@@ -464,6 +484,11 @@ mod tests {
             }
             assert_eq!(diff_2, right);
         }
+        println!(
+            "Sum diff time for {} elems = {:?}",
+            num_test_cases,
+            start.elapsed()
+        );
     }
 
     #[test]
@@ -518,14 +543,20 @@ mod tests {
         // Check resulting polynomial is of correct degree and polynomial becomes 0 at each root
         let num_test_cases = 100;
         let mut rng = rand::thread_rng();
+        let mut start = Instant::now();
         for _ in 0..num_test_cases {
             let num_roots = rng.gen_range(2, 30);
             let roots = FieldElementVector::random(num_roots);
-            let poly = UnivarPolynomial::from_given_roots(roots.as_slice());
+            let poly = UnivarPolynomial::new_with_roots(roots.as_slice());
             assert_eq!(poly.degree(), num_roots);
             for r in roots {
                 assert_eq!(poly.eval(&r), FieldElement::zero())
             }
         }
+        println!(
+            "Time for {} elems = {:?}",
+            num_test_cases,
+            start.elapsed()
+        );
     }
 }
