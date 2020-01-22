@@ -1,4 +1,4 @@
-use std::ops::{Index, IndexMut};
+use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::rayon::iter::IntoParallelRefIterator;
@@ -216,6 +216,29 @@ impl IndexMut<usize> for UnivarPolynomial {
 
 impl Eq for UnivarPolynomial {}
 
+impl<'a> Add<&'a UnivarPolynomial> for &UnivarPolynomial {
+    type Output = UnivarPolynomial;
+    fn add(self, other: &'a UnivarPolynomial) -> UnivarPolynomial {
+        UnivarPolynomial::sum(self, other)
+    }
+}
+
+impl<'a> Sub<&'a UnivarPolynomial> for &UnivarPolynomial {
+    type Output = UnivarPolynomial;
+
+    fn sub(self, other: &'a UnivarPolynomial) -> UnivarPolynomial {
+        UnivarPolynomial::difference(self, other)
+    }
+}
+
+impl<'a> Mul<&'a UnivarPolynomial> for &UnivarPolynomial {
+    type Output = UnivarPolynomial;
+
+    fn mul(self, other: &'a UnivarPolynomial) -> UnivarPolynomial {
+        UnivarPolynomial::multiply(self, other)
+    }
+}
+
 /// Creates a new univariate polynomial from given coefficients from lower to higher degree terms
 #[macro_export]
 macro_rules! univar_polynomial {
@@ -412,6 +435,9 @@ mod tests {
         assert_eq!(product[1], FieldElement::zero());
         assert_eq!(product[2], FieldElement::one());
 
+        // Test overloaded operator
+        assert_eq!(product, &left * &right);
+
         // (x + 1) * (2x + 1) = 2x^2 + 3x + 1
         // 1 + x
         let left = UnivarPolynomial(FieldElementVector::from(vec![
@@ -429,6 +455,9 @@ mod tests {
         assert_eq!(product[0], FieldElement::one());
         assert_eq!(product[1], FieldElement::from(3u64));
         assert_eq!(product[2], FieldElement::from(2u64));
+
+        // Test overloaded operator
+        assert_eq!(product, &left * &right);
 
         // (x^2 + 1) * (x^3 + 4) = x^5 + x^3 + 4x^2 + 4
         // 1 + x^2
@@ -453,6 +482,9 @@ mod tests {
         assert_eq!(product[3], FieldElement::one());
         assert_eq!(product[4], FieldElement::zero());
         assert_eq!(product[5], FieldElement::one());
+
+        // Test overloaded operator
+        assert_eq!(product, &left * &right);
     }
 
     #[test]
@@ -524,8 +556,15 @@ mod tests {
             // sum is commutative
             assert_eq!(sum, UnivarPolynomial::sum(&right, &left));
 
+            // Test overloaded operator
+            assert_eq!(sum, &left + &right);
+
             // sum - left == right
             let mut diff_1 = UnivarPolynomial::difference(&sum, &right);
+
+            // Test overloaded operator
+            assert_eq!(diff_1, &sum - &right);
+
             // Since degree of difference is same as degree of `sum` but the higher degree coeffs
             // of difference will be 0. Remove those 0s (after checking that they really are 0) and
             // then do equality comparison with `left`
@@ -537,6 +576,10 @@ mod tests {
 
             // sum - right == left
             let mut diff_2 = UnivarPolynomial::difference(&sum, &left);
+
+            // Test overloaded operator
+            assert_eq!(diff_2, &sum - &left);
+
             // Since degree of difference is same as degree of `sum` but the higher degree coeffs
             // of difference will be 0. Remove those 0s (after checking that they really are 0) and
             // then do equality comparison with `right`
@@ -570,6 +613,9 @@ mod tests {
             // product / right == left
             let quotient_2 = UnivarPolynomial::long_division(&product, &right).0;
             assert_eq!(quotient_2, left);
+
+            // Test overloaded operator
+            assert_eq!(product, &left * &right);
         }
     }
 
