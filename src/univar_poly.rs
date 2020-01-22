@@ -1,9 +1,9 @@
 use std::ops::{Index, IndexMut};
 
 use crate::field_elem::{FieldElement, FieldElementVector};
-use std::cmp::max;
-use rayon::prelude::*;
 use crate::rayon::iter::IntoParallelRefIterator;
+use rayon::prelude::*;
+use std::cmp::max;
 
 /// Univariate polynomial represented with coefficients in a vector. The ith element of the vector is the coefficient of the ith degree term.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -43,10 +43,15 @@ impl UnivarPolynomial {
             .collect::<Vec<UnivarPolynomial>>();
 
         // Polynomial (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last])
-        x_i.par_iter().cloned().reduce(|| Self::new_constant(FieldElement::one()), |a, b| UnivarPolynomial::multiply(&a, &b))
+        x_i.par_iter().cloned().reduce(
+            || Self::new_constant(FieldElement::one()),
+            |a, b| UnivarPolynomial::multiply(&a, &b),
+        )
     }
 
-    // TODO: Add method new_with_coefficients
+    pub fn coefficients(&self) -> &FieldElementVector {
+        &self.0
+    }
 
     pub fn degree(&self) -> usize {
         // TODO: This makes fetching the coefficient ambiguous as a 0 degree polynomial might
@@ -73,8 +78,8 @@ impl UnivarPolynomial {
             // p(x) = a_0 + a_1*x + a_2*x^2 + a_3*x^3 + a_4*x^4 + ...
             // p(x) = a_0 + x*(a_1 + x*(a_2 + x*(a_3 + x*(a_4 + ... x*(a_{n-1} + x*a_n))))..
             // Reading coefficients from higher to lower degrees.
-            let mut res = self.0[self.0.len()-1].clone();     // a_n
-            for i in (0..=self.0.len()-2).rev() {
+            let mut res = self.0[self.0.len() - 1].clone(); // a_n
+            for i in (0..=self.0.len() - 2).rev() {
                 // in each iteration, multiply `res` with `x` and add the coefficient for ith degree, a_i
                 res = &self.0[i] + &(&res * x);
             }
@@ -113,7 +118,10 @@ impl UnivarPolynomial {
         for _ in div_degree..=rem_degree {
             remainder.0.pop();
         }
-        (UnivarPolynomial(FieldElementVector::from(quotient)), remainder)
+        (
+            UnivarPolynomial(FieldElementVector::from(quotient)),
+            remainder,
+        )
     }
 
     /// Return product of 2 polynomials. `left` * `right`
@@ -140,7 +148,10 @@ impl UnivarPolynomial {
         // version would be  `for i in 0..=smaller_poly_degree { sum_poly[i] += &smaller_poly[i]; }`
 
         // Add small degree ([0, smaller_poly_degree]) terms in parallel
-        let small_degree_terms = (0..=smaller_poly_degree).into_par_iter().map(|i| &sum_poly[i] + &smaller_poly[i]).collect::<Vec<FieldElement>>();
+        let small_degree_terms = (0..=smaller_poly_degree)
+            .into_par_iter()
+            .map(|i| &sum_poly[i] + &smaller_poly[i])
+            .collect::<Vec<FieldElement>>();
         // Replace small degree ([0, smaller_poly_degree]) terms in the sum_poly
         sum_poly.replace_small_degree_terms(smaller_poly_degree, small_degree_terms.into_iter());
         sum_poly
@@ -163,9 +174,28 @@ impl UnivarPolynomial {
         diff
     }
 
+    pub fn multiply_by_constant(&self, constant: &FieldElement) -> UnivarPolynomial {
+        let mut new_poly = self.clone();
+        for i in 0..=self.degree() {
+            new_poly[i] = constant * &self[i];
+        }
+        new_poly
+    }
+
+    pub fn multiply_by_monic_monomial(&self, monomial_degree: u64) -> UnivarPolynomial {
+        let mut new_poly = self.clone();
+        let new_poly_beginning = FieldElementVector::new(monomial_degree as usize);
+        new_poly.0.splice(0..0, new_poly_beginning);
+        new_poly
+    }
+
     /// Replace terms of `self` from degree 0 to `till_degree` with coefficients in `replace_with`.
     /// Assumes `replace_with` will yield at least `till_degree` + 1 coefficients
-    fn replace_small_degree_terms<I: IntoIterator<Item=FieldElement>>(&mut self, till_degree: usize, replace_with: I) {
+    fn replace_small_degree_terms<I: IntoIterator<Item = FieldElement>>(
+        &mut self,
+        till_degree: usize,
+        replace_with: I,
+    ) {
         self.0.splice(0..=till_degree, replace_with)
     }
 }
@@ -182,6 +212,22 @@ impl IndexMut<usize> for UnivarPolynomial {
     fn index_mut(&mut self, idx: usize) -> &mut FieldElement {
         &mut self.0[idx]
     }
+}
+
+impl Eq for UnivarPolynomial {}
+
+/// Creates a new univariate polynomial from given coefficients from lower to higher degree terms
+#[macro_export]
+macro_rules! univar_polynomial {
+    ( $( $elem:expr ),* ) => {
+        {
+            let mut coeffs = vec![];
+            $(
+                coeffs.push($elem);
+            )*
+            UnivarPolynomial(coeffs.into())
+        }
+    };
 }
 
 #[cfg(test)]
@@ -206,7 +252,23 @@ mod tests {
         assert!(!poly4.is_zero());
         assert_eq!(poly4.degree(), 0);
         assert_eq!(poly4[0], FieldElement::from(100u64));
+    }
 
+    #[test]
+    fn test_create_poly_from_macro() {
+        let poly = univar_polynomial!(
+            FieldElement::one(),
+            FieldElement::zero(),
+            FieldElement::from(87u64),
+            FieldElement::minus_one(),
+            FieldElement::from(300u64)
+        );
+        assert_eq!(poly.degree(), 4);
+        assert_eq!(poly[0], FieldElement::one());
+        assert_eq!(poly[1], FieldElement::zero());
+        assert_eq!(poly[2], FieldElement::from(87u64));
+        assert_eq!(poly[3], FieldElement::minus_one());
+        assert_eq!(poly[4], FieldElement::from(300u64));
     }
 
     #[test]
@@ -553,10 +615,131 @@ mod tests {
                 assert_eq!(poly.eval(&r), FieldElement::zero())
             }
         }
-        println!(
-            "Time for {} elems = {:?}",
-            num_test_cases,
-            start.elapsed()
+        println!("Time for {} elems = {:?}", num_test_cases, start.elapsed());
+    }
+
+    #[test]
+    fn test_multiply_with_constant() {
+        // 9 + 2x + 75x^2 + 128x^3
+        let orig = UnivarPolynomial(FieldElementVector::from(vec![
+            FieldElement::from(9u64),
+            FieldElement::from(2u64),
+            FieldElement::from(75u64),
+            FieldElement::from(128u64),
+        ]));
+        let c = FieldElement::from(3u64);
+        let new = orig.multiply_by_constant(&c);
+        assert_eq!(new.degree(), 3);
+        assert_eq!(new[0], FieldElement::from(27));
+        assert_eq!(new[1], FieldElement::from(6));
+        assert_eq!(new[2], FieldElement::from(225));
+        assert_eq!(new[3], FieldElement::from(384));
+
+        // 1 + 4x^2 + 5x^3 + 18x^6
+        let orig = UnivarPolynomial(FieldElementVector::from(vec![
+            FieldElement::one(),
+            FieldElement::zero(),
+            FieldElement::from(4u64),
+            FieldElement::from(5u64),
+            FieldElement::zero(),
+            FieldElement::zero(),
+            FieldElement::from(18u64),
+        ]));
+        let c = FieldElement::from(10u64);
+        let new = orig.multiply_by_constant(&c);
+        assert_eq!(new.degree(), 6);
+        assert_eq!(new[0], FieldElement::from(10));
+        assert_eq!(new[1], FieldElement::zero());
+        assert_eq!(new[2], FieldElement::from(40));
+        assert_eq!(new[3], FieldElement::from(50));
+        assert_eq!(new[4], FieldElement::zero());
+        assert_eq!(new[5], FieldElement::zero());
+        assert_eq!(new[6], FieldElement::from(180));
+
+        // take a random polynomial, multiply it with a constant, then multiply it with inverse of
+        // the same constant. result should be same as original
+        let random_poly = UnivarPolynomial::random(10);
+        let c = FieldElement::random();
+        let c_inv = c.inverse();
+        assert_eq!(
+            random_poly,
+            random_poly
+                .multiply_by_constant(&c)
+                .multiply_by_constant(&c_inv)
         );
+    }
+
+    #[test]
+    fn test_multiply_with_monic_monomial() {
+        // 9 + 2x + 75x^2 + 128x^3
+        let orig = UnivarPolynomial(FieldElementVector::from(vec![
+            FieldElement::from(9u64),
+            FieldElement::from(2u64),
+            FieldElement::from(75u64),
+            FieldElement::from(128u64),
+        ]));
+
+        let monomial_degree = 0;
+        let new = orig.multiply_by_monic_monomial(monomial_degree);
+        assert_eq!(new, orig);
+
+        let monomial_degree = 1;
+        let new = orig.multiply_by_monic_monomial(monomial_degree);
+        assert_eq!(new.degree(), 4);
+        assert_eq!(new[0], FieldElement::zero());
+        assert_eq!(new[1], FieldElement::from(9u64));
+        assert_eq!(new[2], FieldElement::from(2u64));
+        assert_eq!(new[3], FieldElement::from(75u64));
+        assert_eq!(new[4], FieldElement::from(128u64));
+
+        let monomial_degree = 2;
+        let new = orig.multiply_by_monic_monomial(monomial_degree);
+        assert_eq!(new.degree(), 5);
+        assert_eq!(new[0], FieldElement::zero());
+        assert_eq!(new[1], FieldElement::zero());
+        assert_eq!(new[2], FieldElement::from(9u64));
+        assert_eq!(new[3], FieldElement::from(2u64));
+        assert_eq!(new[4], FieldElement::from(75u64));
+        assert_eq!(new[5], FieldElement::from(128u64));
+
+        // 1 + 4x^2 + 5x^3 + 18x^6
+        let orig = UnivarPolynomial(FieldElementVector::from(vec![
+            FieldElement::one(),
+            FieldElement::zero(),
+            FieldElement::from(4u64),
+            FieldElement::from(5u64),
+            FieldElement::zero(),
+            FieldElement::zero(),
+            FieldElement::from(18u64),
+        ]));
+
+        let monomial_degree = 0;
+        let new = orig.multiply_by_monic_monomial(monomial_degree);
+        assert_eq!(new, orig);
+
+        let monomial_degree = 1;
+        let new = orig.multiply_by_monic_monomial(monomial_degree);
+        assert_eq!(new.degree(), 7);
+        assert_eq!(new[0], FieldElement::zero());
+        assert_eq!(new[1], FieldElement::one());
+        assert_eq!(new[2], FieldElement::zero());
+        assert_eq!(new[3], FieldElement::from(4));
+        assert_eq!(new[4], FieldElement::from(5));
+        assert_eq!(new[5], FieldElement::zero());
+        assert_eq!(new[6], FieldElement::zero());
+        assert_eq!(new[7], FieldElement::from(18));
+
+        let monomial_degree = 2;
+        let new = orig.multiply_by_monic_monomial(monomial_degree);
+        assert_eq!(new.degree(), 8);
+        assert_eq!(new[0], FieldElement::zero());
+        assert_eq!(new[1], FieldElement::zero());
+        assert_eq!(new[2], FieldElement::one());
+        assert_eq!(new[3], FieldElement::zero());
+        assert_eq!(new[4], FieldElement::from(4));
+        assert_eq!(new[5], FieldElement::from(5));
+        assert_eq!(new[6], FieldElement::zero());
+        assert_eq!(new[7], FieldElement::zero());
+        assert_eq!(new[8], FieldElement::from(18));
     }
 }

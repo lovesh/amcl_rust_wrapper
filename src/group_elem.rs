@@ -3,9 +3,9 @@ use rand::{CryptoRng, RngCore};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 
-use std::slice::Iter;
-use rayon::prelude::*;
 use crate::rayon::iter::IntoParallelRefMutIterator;
+use rayon::prelude::*;
+use std::slice::Iter;
 
 #[macro_export]
 macro_rules! add_group_elems {
@@ -534,7 +534,10 @@ macro_rules! impl_group_elem_vec_ops {
         impl GroupElementVector<$group_element> for $group_element_vec {
             fn new(size: usize) -> Self {
                 Self {
-                    elems: (0..size).into_par_iter().map(|_| $group_element::new()).collect(),
+                    elems: (0..size)
+                        .into_par_iter()
+                        .map(|_| $group_element::new())
+                        .collect(),
                 }
             }
 
@@ -577,7 +580,10 @@ macro_rules! impl_group_elem_vec_ops {
             }
 
             fn sum(&self) -> $group_element {
-                self.as_slice().par_iter().cloned().reduce(|| $group_element::new(), |a, b| a + b)
+                self.as_slice()
+                    .par_iter()
+                    .cloned()
+                    .reduce(|| $group_element::new(), |a, b| a + b)
             }
 
             fn scale(&mut self, n: &FieldElement) {
@@ -601,18 +607,22 @@ macro_rules! impl_group_elem_vec_ops {
             fn plus(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
                 let mut sum_vector = Self::new(self.len());
-                sum_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
-                    *e = &self[i] + &b[i]
-                });
+                sum_vector
+                    .as_mut_slice()
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, e)| *e = &self[i] + &b[i]);
                 Ok(sum_vector)
             }
 
             fn minus(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
                 let mut diff_vector = Self::new(self.len());
-                diff_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
-                    *e = &self[i] - &b[i]
-                });
+                diff_vector
+                    .as_mut_slice()
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, e)| *e = &self[i] - &b[i]);
                 Ok(diff_vector)
             }
 
@@ -621,7 +631,8 @@ macro_rules! impl_group_elem_vec_ops {
             }
 
             fn random(size: usize) -> Self {
-                (0..size).into_par_iter()
+                (0..size)
+                    .into_par_iter()
                     .map(|_| $group_element::random())
                     .collect::<Vec<$group_element>>()
                     .into()
@@ -1249,14 +1260,22 @@ mod test {
                         expected_1.add_assign_(&(&gs[i] * &fs[i]));
                     }
 
-                    let res_2 = $vector::multi_scalar_mul_const_time_without_precomputation(gs.as_slice(), fs.as_slice()).unwrap();
+                    let res_2 = $vector::multi_scalar_mul_const_time_without_precomputation(
+                        gs.as_slice(),
+                        fs.as_slice(),
+                    )
+                    .unwrap();
 
                     assert_eq!(expected, res);
                     assert_eq!(expected_1, res);
                     assert_eq!(res_1, res);
                     assert_eq!(res_2, res);
 
-                    let res_3 = $vector::multi_scalar_mul_const_time_without_precomputation(gv.as_ref(), fv.as_ref()).unwrap();
+                    let res_3 = $vector::multi_scalar_mul_const_time_without_precomputation(
+                        gv.as_ref(),
+                        fv.as_ref(),
+                    )
+                    .unwrap();
                     assert_eq!(res_3, res);
                 }
             };

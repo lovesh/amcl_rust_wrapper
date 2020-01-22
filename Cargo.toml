@@ -1,6 +1,6 @@
 [package]
 name = "amcl_wrapper"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
 description = "Wapper over Milagro Cryptographic Library (version 3)"
 repository = "https://github.com/lovesh/amcl_rust_wrapper"
@@ -30,6 +30,7 @@ zeroize = "1.1.0"
 #tiny-keccak = "1.5"
 sha3 = "0.8.2"
 rayon = "1.3"
+subtle-encoding = "0.5.0"
 
 [dependencies.amcl]
 package = "miracl_amcl"

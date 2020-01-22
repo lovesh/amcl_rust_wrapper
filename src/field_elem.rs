@@ -11,15 +11,15 @@ use amcl::rand::RAND;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign, RangeBounds};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, RangeBounds, Sub, SubAssign};
 use std::slice::Iter;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 
-use zeroize::Zeroize;
-use rayon::prelude::*;
 use crate::rayon::iter::IntoParallelRefMutIterator;
+use rayon::prelude::*;
+use zeroize::Zeroize;
 
 #[macro_export]
 macro_rules! add_field_elems {
@@ -756,9 +756,14 @@ pub struct FieldElementVector {
 
 impl FieldElementVector {
     /// Creates a new field element vector with each element being 0
+    // FIXME: size should have a type like u64 since usize can be small on older/smaller machines. This code
+    // is less likely to be used on older/smaller machines though
     pub fn new(size: usize) -> Self {
         Self {
-            elems: (0..size).into_par_iter().map(|_| FieldElement::new()).collect(),
+            elems: (0..size)
+                .into_par_iter()
+                .map(|_| FieldElement::new())
+                .collect(),
         }
     }
 
@@ -790,7 +795,8 @@ impl FieldElementVector {
 
     /// Get a vector of random field elements
     pub fn random(size: usize) -> Self {
-        (0..size).into_par_iter()
+        (0..size)
+            .into_par_iter()
             .map(|_| FieldElement::random())
             .collect::<Vec<FieldElement>>()
             .into()
@@ -848,9 +854,11 @@ impl FieldElementVector {
     pub fn plus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = Self::new(self.len());
-        sum_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
-            *e = &self[i] + &b[i]
-        });
+        sum_vector
+            .as_mut_slice()
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| *e = &self[i] + &b[i]);
         Ok(sum_vector)
     }
 
@@ -858,15 +866,20 @@ impl FieldElementVector {
     pub fn minus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = Self::new(self.len());
-        diff_vector.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
-            *e = &self[i] - &b[i]
-        });
+        diff_vector
+            .as_mut_slice()
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| *e = &self[i] - &b[i]);
         Ok(diff_vector)
     }
 
     /// Compute sum of all elements of a vector
     pub fn sum(&self) -> FieldElement {
-        self.as_slice().par_iter().cloned().reduce(|| FieldElement::new(), |a, b| a + b)
+        self.as_slice()
+            .par_iter()
+            .cloned()
+            .reduce(|| FieldElement::new(), |a, b| a + b)
     }
 
     /// Computes inner product of 2 vectors of field elements
@@ -889,9 +902,11 @@ impl FieldElementVector {
     ) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut hadamard_product = Self::new(self.len());
-        hadamard_product.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
-            *e = &self[i] * &b[i]
-        });
+        hadamard_product
+            .as_mut_slice()
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| *e = &self[i] * &b[i]);
         Ok(hadamard_product)
     }
 
@@ -902,7 +917,11 @@ impl FieldElementVector {
 
     /// Replace a range `R` of the vector with `I`. Same as Vector's splice except it does not return
     /// anything. Only available to this crate for now for some manipulations in Polynomial
-    pub(crate) fn splice<R, I>(&mut self, range: R, replace_with: I) where R: RangeBounds<usize>, I: IntoIterator<Item=FieldElement> {
+    pub(crate) fn splice<R, I>(&mut self, range: R, replace_with: I)
+    where
+        R: RangeBounds<usize>,
+        I: IntoIterator<Item = FieldElement>,
+    {
         self.elems.splice(range, replace_with);
     }
 

@@ -4,20 +4,20 @@ use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
 use crate::types::{GroupG2, FP2};
 use crate::utils::hash_msg;
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 use std::iter;
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
 use crate::group_elem_g1::parse_hex_as_FP;
+use crate::rayon::iter::IntoParallelRefMutIterator;
+use rayon::prelude::*;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
-use zeroize::Zeroize;
 use std::str::SplitWhitespace;
-use rayon::prelude::*;
-use crate::rayon::iter::IntoParallelRefMutIterator;
+use zeroize::Zeroize;
 
 #[derive(Clone, Debug)]
 pub struct G2 {
@@ -198,7 +198,8 @@ impl G2 {
         // TODO: Replace with faster
         let group_elems = iter::once(self).chain(iter::once(h));
         let field_elems = iter::once(a).chain(iter::once(b));
-        G2Vector::multi_scalar_mul_const_time_without_precomputation(group_elems, field_elems).unwrap()
+        G2Vector::multi_scalar_mul_const_time_without_precomputation(group_elems, field_elems)
+            .unwrap()
     }
 }
 

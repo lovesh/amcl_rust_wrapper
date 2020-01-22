@@ -10,12 +10,12 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
+use crate::rayon::iter::IntoParallelRefMutIterator;
+use rayon::prelude::*;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};
 use zeroize::Zeroize;
-use rayon::prelude::*;
-use crate::rayon::iter::IntoParallelRefMutIterator;
 
 #[derive(Clone, Debug)]
 pub struct G1 {
@@ -213,9 +213,9 @@ pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::borrow::Borrow;
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
-    use std::borrow::Borrow;
 
     #[test]
     fn test_parse_hex_for_FP() {
