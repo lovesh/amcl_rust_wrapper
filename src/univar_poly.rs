@@ -283,7 +283,7 @@ mod tests {
             FieldElement::one(),
             FieldElement::zero(),
             FieldElement::from(87u64),
-            FieldElement::minus_one(),
+            -FieldElement::one(),
             FieldElement::from(300u64)
         );
         assert_eq!(poly.degree(), 4);
@@ -547,7 +547,7 @@ mod tests {
         // Test sum and difference of randomly generated polynomials.
         let num_test_cases = 100;
         let mut rng = rand::thread_rng();
-        let mut start = Instant::now();
+        let start = Instant::now();
         for _ in 0..num_test_cases {
             let left = UnivarPolynomial::random(rng.gen_range(1, 100));
             let right = UnivarPolynomial::random(rng.gen_range(1, 100));

@@ -275,13 +275,28 @@ let poly2 = UnivarPolynomial::random(d);
 // Create a polynomial from its roots  
 let poly3 = UnivarPolynomial::new_with_roots(roots);
 
+// Create a polynomial by passing the coefficients to a macro
+let poly4 = univar_polynomial!(
+            FieldElement::one(),
+            FieldElement::zero(),
+            FieldElement::from(87u64),
+            -FieldElement::one(),
+            FieldElement::from(300u64)
+        );
+
 // A polynomial can be evaluated at a field element `v` 
 let res: FieldElement = poly1.eval(v);
 
 // Polynomials can be added, subtracted, multiplied or divided to give new polynomials
 let sum = UnivarPolynomial::sum(&poly1, &poly2);
+// Or use operator overloading
+let sum = &poly1 + &poly2;
 let diff = UnivarPolynomial::difference(&poly1, &poly2);
+// Or use operator overloading
+let diff = &poly1 - &poly2;
 let product = UnivarPolynomial::multiply(&poly1, &poly2);
+// Or use operator overloading
+let product = &poly1 * &poly2;
 let (quotient, rem) = UnivarPolynomial::long_division(&poly1, &poly2);
 ```
 

@@ -716,7 +716,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             }
 
             /// Strauss multi-scalar multiplication
-            fn multi_scalar_mul_var_time_without_precomputation<'g, 'f>(
+            pub fn multi_scalar_mul_var_time_without_precomputation<'g, 'f>(
                 group_elems: impl IntoIterator<Item = &'g $group_element>,
                 field_elems: impl IntoIterator<Item = &'f FieldElement>,
             ) -> Result<$group_element, ValueError> {
