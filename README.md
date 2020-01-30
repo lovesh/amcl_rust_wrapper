@@ -11,7 +11,7 @@
 
 ## Building
 The wrapper has to be built by enabling any one of the mentioned curve as a feature.   
-To build for BLS-381 curve, use (BLS381 is the default curve so not using `--no-default-features` is fine)
+To build for BLS-381 curve, use 
 
 ```
 cargo build --no-default-features --features bls381
@@ -27,11 +27,11 @@ To run tests for secp256k1, use
 cargo test --no-default-features --features secp256k1
 ```
 
-To use it as dependency crate, add the name of the curve as a feature. Something like this
+To use it as dependency crate, use the name of the curve as a feature. eg. for BLS12-381 curve, use
 ```
 [dependencies.amcl_wrapper]
-git = "https://github.com/lovesh/amcl_rust_wrapper"
-branch = "master"
+version = "0.3.4"
+default-features = false
 features = ["bls381"]
 ```
 
@@ -297,6 +297,7 @@ let diff = &poly1 - &poly2;
 let product = UnivarPolynomial::multiply(&poly1, &poly2);
 // Or use operator overloading
 let product = &poly1 * &poly2;
+// Dividing polynomials: poly1 / poly2 
 let (quotient, rem) = UnivarPolynomial::long_division(&poly1, &poly2);
 ```
 

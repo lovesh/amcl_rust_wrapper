@@ -3,7 +3,6 @@ use rand::{CryptoRng, RngCore};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 
-use crate::rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use std::slice::Iter;
 

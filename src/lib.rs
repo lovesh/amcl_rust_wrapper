@@ -1,4 +1,5 @@
-#![allow(non_snake_case)]
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
 
 pub extern crate amcl;
 
@@ -22,7 +23,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
 extern crate serde_json;
 
 extern crate rayon;

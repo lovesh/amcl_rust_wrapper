@@ -886,11 +886,8 @@ impl FieldElementVector {
     /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % curve_order
     pub fn inner_product(&self, b: &FieldElementVector) -> Result<FieldElement, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let mut accum = FieldElement::new();
-        for i in 0..self.len() {
-            accum += &self[i] * &b[i];
-        }
-        Ok(accum)
+        let r = (0..b.len()).into_par_iter().map(|i| (&self[i] * &b[i])).reduce(|| FieldElement::new(), |a, b| a + b);
+        Ok(r)
     }
 
     /// Calculates Hadamard product of 2 field element vectors.
@@ -1405,7 +1402,7 @@ mod test {
             assert_eq!(x, FieldElement::from_power_of_2_base(&b, 3));
         }
 
-        for i in 0..100 {
+        for _ in 0..100 {
             let x = FieldElement::random();
             for base in 2..8 {
                 let digits = x.to_power_of_2_base(base);
