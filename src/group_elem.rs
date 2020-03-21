@@ -928,6 +928,7 @@ macro_rules! impl_group_elem_vec_conversions {
 mod test {
     use super::*;
     use crate::constants::GROUP_G1_SIZE;
+    use crate::field_elem::FieldElementVector;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::constants::{GROUP_G2_SIZE, GROUP_GT_SIZE};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -936,7 +937,7 @@ mod test {
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::group_elem_g2::{G2LookupTable, G2Vector, G2};
     use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -968,9 +969,9 @@ mod test {
 
         to_and_fro_bytes!(G1, GROUP_G1_SIZE);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        to_and_fro_bytes!(G2, GroupG2_SIZE);
+        to_and_fro_bytes!(G2, GROUP_G2_SIZE);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        to_and_fro_bytes!(GT, GroupGT_SIZE);
+        to_and_fro_bytes!(GT, GROUP_GT_SIZE);
     }
 
     #[test]
@@ -1114,17 +1115,17 @@ mod test {
         macro_rules! add_mul {
             ( $group:ident ) => {
                 let points: Vec<_> = (0..100).map(|_| $group::random()).collect();
-                let mut R = $group::random();
+                let mut r = $group::random();
                 let mut start = Instant::now();
                 for i in 0..count {
-                    R = R + &points[i];
+                    r = r + &points[i];
                 }
                 println!("Addition time for {} elems = {:?}", count, start.elapsed());
 
                 let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
                 start = Instant::now();
                 for i in 0..count {
-                    &points[i] * &fs[i];
+                    let _  = &points[i] * &fs[i];
                 }
                 println!(
                     "Scalar multiplication time for {} elems = {:?}",

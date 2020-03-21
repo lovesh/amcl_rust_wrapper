@@ -205,15 +205,14 @@ impl G2 {
 
 #[cfg(test)]
 mod test {
-    use super::*;
 
     #[test]
-    fn test_parse_hex_for_FP2() {
+    fn test_parse_hex_for_fp2() {
         // TODO:
     }
 
     #[test]
-    fn test_parse_bad_hex_for_FP2() {
+    fn test_parse_bad_hex_for_fp2() {
         // TODO:
     }
 }

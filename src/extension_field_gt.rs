@@ -257,8 +257,7 @@ impl Mul<&GT> for &GT {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::group_elem_g1::G1Vector;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_unity() {

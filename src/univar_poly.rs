@@ -257,7 +257,7 @@ macro_rules! univar_polynomial {
 mod tests {
     use super::*;
     use rand::Rng;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_poly() {
@@ -651,7 +651,7 @@ mod tests {
         // Check resulting polynomial is of correct degree and polynomial becomes 0 at each root
         let num_test_cases = 100;
         let mut rng = rand::thread_rng();
-        let mut start = Instant::now();
+        let start = Instant::now();
         for _ in 0..num_test_cases {
             let num_roots = rng.gen_range(2, 30);
             let roots = FieldElementVector::random(num_roots);

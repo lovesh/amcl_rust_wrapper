@@ -167,7 +167,7 @@ mod test {
     use crate::ECCurve::big::BIG;
     use crate::ECCurve::ecp::ECP;
     use crate::ECCurve::fp::FP;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn timing_fp_big() {

@@ -213,17 +213,15 @@ pub fn parse_hex_as_fp(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::borrow::Borrow;
-    use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
-    fn test_parse_hex_for_FP() {
+    fn test_parse_hex_for_fp() {
         // TODO:
     }
 
     #[test]
-    fn test_parse_bad_hex_for_FP() {
+    fn test_parse_bad_hex_for_fp() {
         // TODO:
     }
 

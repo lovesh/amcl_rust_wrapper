@@ -536,6 +536,10 @@ impl FieldElement {
             self.clone()
         }
     }
+
+    pub const fn from_array(w: [Limb; NLEN]) -> FieldElement {
+        FieldElement { value: BigNum { w } }
+    }
 }
 
 impl Serialize for FieldElement {
@@ -1041,11 +1045,10 @@ pub fn multiply_row_vector_with_matrix(
 #[cfg(test)]
 mod test {
     use super::*;
-    use amcl::bls381::big::BIG;
     use rand::Rng;
     use serde_json;
     use std::collections::{HashMap, HashSet};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_to_and_from_bytes() {
@@ -1496,10 +1499,10 @@ mod test {
     fn timing_field_elem_addition() {
         let count = 100;
         let points: Vec<FieldElement> = (0..count).map(|_| FieldElement::random()).collect();
-        let mut R = FieldElement::random();
+        let mut r = FieldElement::random();
         let start = Instant::now();
         for i in 0..count {
-            R = &R + &points[i];
+            r = &r + &points[i];
         }
         println!("Addition time for {} elems = {:?}", count, start.elapsed());
     }
