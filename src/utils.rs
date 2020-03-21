@@ -3,7 +3,7 @@ extern crate sha3;
 
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{CURVE_ORDER, FIELD_ELEMENT_SIZE};
+use crate::constants::{MODULUS, FIELD_ELEMENT_SIZE};
 use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
@@ -140,14 +140,14 @@ fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: 
 pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
     let k = modulus.nbits();
 
-    // u = floor(2^2k/CURVE_ORDER)
+    // u = floor(2^2k/MODULUS)
     let mut u = DoubleBigNum::new();
     u.w[0] = 1;
     // `u.shl(2*k)` crashes, so perform shl(k) twice
     u.shl(k);
     u.shl(k);
     // div returns floored value
-    let u = u.div(&CURVE_ORDER);
+    let u = u.div(&MODULUS);
 
     // v = 2^(k+1)
     let mut v = BigNum::new_int(1isize);
@@ -179,7 +179,7 @@ mod test {
         let mut res_mul = BIG::new_int(1 as isize);
         let mut start = Instant::now();
         for b in &bigs {
-            res_mul = BigNum::modmul(&res_mul, &b, &CURVE_ORDER);
+            res_mul = BigNum::modmul(&res_mul, &b, &MODULUS);
         }
         println!(
             "Multiplication time for {} BIGs = {:?}",
@@ -215,12 +215,12 @@ mod test {
         start = Instant::now();
         for b in &bigs {
             let mut i = b.clone();
-            i.invmodp(&CURVE_ORDER);
+            i.invmodp(&MODULUS);
             inverses_b.push(i);
         }
         println!("Inverse time for {} BIGs = {:?}", count, start.elapsed());
         for i in 0..count {
-            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &CURVE_ORDER);
+            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &MODULUS);
             assert_eq!(BigNum::comp(&r, &BigNum::new_int(1 as isize)), 0);
         }
 
@@ -243,7 +243,7 @@ mod test {
         let mut r = bigs[0];
         for i in 0..c {
             r.add(&bigs[i]);
-            r.rmod(&CURVE_ORDER);
+            r.rmod(&MODULUS);
         }
         println!("Addition time for {} BIGs = {:?}", c, start.elapsed());
 
@@ -296,7 +296,7 @@ mod test {
 
     #[test]
     fn timing_barrett_reduction() {
-        //let (k, u, v) = barrett_reduction_params(&CURVE_ORDER);
+        //let (k, u, v) = barrett_reduction_params(&MODULUS);
         let (k, u, v) = (
             *constants::BARRETT_REDC_K,
             *constants::BARRETT_REDC_U,
@@ -310,13 +310,13 @@ mod test {
         for _ in 0..count {
             let a: u32 = rng.gen();
             let s = BigNum::new_int(a as isize);
-            let _x = CURVE_ORDER.minus(&s);
+            let _x = MODULUS.minus(&s);
             xs.push(BigNum::mul(&_x, &_x));
         }
 
         let mut start = Instant::now();
         for x in &xs {
-            let r = barrett_reduction(&x, &CURVE_ORDER, k, &u, &v);
+            let r = barrett_reduction(&x, &MODULUS, k, &u, &v);
             reduced1.push(r);
         }
         println!("Barrett time = {:?}", start.elapsed());
@@ -324,7 +324,7 @@ mod test {
         start = Instant::now();
         for x in &xs {
             let mut y = x.clone();
-            let z = y.dmod(&CURVE_ORDER);
+            let z = y.dmod(&MODULUS);
             reduced2.push(z);
         }
         println!("Normal time = {:?}", start.elapsed());
@@ -349,7 +349,7 @@ mod test {
         let mut start = Instant::now();
         for i in 0..count {
             sum = BigNum::plus(&sum, &bigs[i]);
-            sum.rmod(&CURVE_ORDER)
+            sum.rmod(&MODULUS)
         }
         println!("rmod time = {:?}", start.elapsed());
 
@@ -357,7 +357,7 @@ mod test {
         start = Instant::now();
         for i in 0..count {
             sum_b = BigNum::plus(&sum_b, &bigs[i]);
-            sum_b = __barrett_reduction__(&sum_b, &CURVE_ORDER, k, &u, &v)
+            sum_b = __barrett_reduction__(&sum_b, &MODULUS, k, &u, &v)
         }
         println!("Barrett time = {:?}", start.elapsed());
 

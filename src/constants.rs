@@ -16,18 +16,19 @@ pub const GROUP_G1_SIZE: usize = (2 * MODBYTES + 1) as usize;
 lazy_static! {
     pub static ref GENERATOR_G1: GroupG1 = GroupG1::generator();
     pub static ref MODULUS: BigNum = BigNum::new_ints(&rom::MODULUS);
+    pub static ref MODULUS_BITS: usize = MODULUS.nbits();
     pub static ref CURVE_ORDER: BigNum = BigNum::new_ints(&rom::CURVE_ORDER);
-    pub static ref CURVE_ORDER_MINUS_1_DIV_2: BigNum = {
-        let mut order = BigNum::new_ints(&rom::CURVE_ORDER);
+    pub static ref MODULUS_MINUS_1_DIV_2: BigNum = {
+        let mut order = BigNum::new_ints(&rom::MODULUS);
         order.dec(1);
         order.shr(1);
         order
     };
     pub static ref CURVE_ORDER_BIT_SIZE: usize = CURVE_ORDER.nbits();
     pub static ref FIELD_ELEMENT_ZERO: BigNum = BigNum::new();
-    pub static ref BARRETT_REDC_K: usize = CURVE_ORDER.nbits();
+    pub static ref BARRETT_REDC_K: usize = MODULUS.nbits();
     pub static ref BARRETT_REDC_U: BigNum = {
-        let k = CURVE_ORDER.nbits();
+        let k = MODULUS.nbits();
         let mut u = DoubleBigNum::new();
         u.w[0] = 1;
         // `u.shl(2*k)` crashes, so perform shl(k) twice
@@ -35,11 +36,11 @@ lazy_static! {
         u.shl(k);
 
         // div returns floored value
-        u.div(&CURVE_ORDER)
+        u.div(&MODULUS)
     };
 
     pub static ref BARRETT_REDC_V: BigNum = {
-        let k = CURVE_ORDER.nbits();
+        let k = MODULUS.nbits();
         let mut v = BigNum::new_int(1isize);
         v.shl(k+1);
         v
