@@ -31,6 +31,7 @@ extern crate subtle_encoding;
 
 pub mod constants;
 pub mod types;
+pub mod signum;
 
 #[macro_use]
 pub mod errors;

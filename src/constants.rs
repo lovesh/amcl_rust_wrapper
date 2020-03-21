@@ -16,6 +16,12 @@ pub const GROUP_G1_SIZE: usize = (2 * MODBYTES + 1) as usize;
 lazy_static! {
     pub static ref GENERATOR_G1: GroupG1 = GroupG1::generator();
     pub static ref CURVE_ORDER: BigNum = BigNum::new_ints(&rom::CURVE_ORDER);
+    pub static ref CURVE_ORDER_MINUS_1_DIV_2: BigNum = {
+        let mut order = BigNum::new_ints(&rom::CURVE_ORDER);
+        order.dec(1);
+        order.shr(1);
+        order
+    };
     pub static ref CURVE_ORDER_BIT_SIZE: usize = CURVE_ORDER.nbits();
     pub static ref FIELD_ELEMENT_ZERO: BigNum = BigNum::new();
     pub static ref BARRETT_REDC_K: usize = CURVE_ORDER.nbits();

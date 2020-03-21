@@ -2,8 +2,10 @@ use rand::{CryptoRng, RngCore};
 
 use crate::constants::{
     BARRETT_REDC_K, BARRETT_REDC_U, BARRETT_REDC_V, BIG_NUM_BITS, CURVE_ORDER, FIELD_ELEMENT_SIZE, NLEN,
+    CURVE_ORDER_MINUS_1_DIV_2
 };
 use crate::errors::{SerzDeserzError, ValueError};
+use crate::signum::Sgn0;
 use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_rng, get_seeded_rng_with_rng, hash_msg};
 use amcl::rand::RAND;
@@ -507,6 +509,32 @@ impl FieldElement {
             res.shl(4);
         }
         return Ok(res);
+    }
+
+    ///If c is False, cmove returns self, otherwise it returns b.
+    pub fn cmove(&self, b: &Self, c: bool) -> Self {
+       let mut res = self.value.clone();
+        res.cmove(&b.value, c as isize);
+        res.into()
+    }
+
+    /// returns either +1 or -1 indicating the
+    /// "sign" of x, where sgn0(x) == -1 just when x is "negative".  In
+    /// other words, this function always considers 0 to be positive.
+    pub fn sgn0(&self) -> Sgn0 {
+        if self.value > *CURVE_ORDER_MINUS_1_DIV_2 {
+            Sgn0::Negative
+        } else {
+            Sgn0::NonNegative
+        }
+    }
+
+    pub fn negate_if(&self, sgn: Sgn0) -> Self {
+        if sgn == Sgn0::Negative {
+            -self.clone()
+        } else {
+            self.clone()
+        }
     }
 }
 
