@@ -3,38 +3,37 @@ extern crate sha3;
 
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{CurveOrder, FieldElement_SIZE};
+use crate::constants::{CURVE_ORDER, FIELD_ELEMENT_SIZE};
 use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
-use crate::errors::SerzDeserzError;
 use sha3::digest::{ExtendableOutput, Input, XofReader};
-use sha3::{Sha3_256, Shake256};
+use sha3::Shake256;
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
-pub fn hash_msg(msg: &[u8]) -> [u8; FieldElement_SIZE] {
+pub fn hash_msg(msg: &[u8]) -> [u8; FIELD_ELEMENT_SIZE] {
     let mut hasher = Shake256::default();
     hasher.input(&msg);
-    let mut h: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+    let mut h: [u8; FIELD_ELEMENT_SIZE] = [0; FIELD_ELEMENT_SIZE];
     hasher.xof_result().read(&mut h);
     h
 }
 
-pub fn get_seeded_RNG_with_rng<R: RngCore + CryptoRng>(entropy_size: usize, rng: &mut R) -> RAND {
+pub fn get_seeded_rng_with_rng<R: RngCore + CryptoRng>(entropy_size: usize, rng: &mut R) -> RAND {
     // initialise from at least 128 byte string of raw random entropy
     let mut entropy = vec![0; entropy_size];
     rng.fill_bytes(&mut entropy.as_mut_slice());
-    get_RAND(entropy_size, entropy.as_slice())
+    get_rand(entropy_size, entropy.as_slice())
 }
 
-pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
+pub fn get_seeded_rng(entropy_size: usize) -> RAND {
     let mut entropy = vec![0; entropy_size];
     let mut rng = rand::thread_rng();
     rng.fill_bytes(&mut entropy.as_mut_slice());
-    get_RAND(entropy_size, entropy.as_slice())
+    get_rand(entropy_size, entropy.as_slice())
 }
 
-fn get_RAND(entropy_size: usize, entropy: &[u8]) -> RAND {
+fn get_rand(entropy_size: usize, entropy: &[u8]) -> RAND {
     let mut r = RAND::new();
     r.clean();
     r.seed(entropy_size, &entropy);
@@ -141,14 +140,14 @@ fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: 
 pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
     let k = modulus.nbits();
 
-    // u = floor(2^2k/CurveOrder)
+    // u = floor(2^2k/CURVE_ORDER)
     let mut u = DoubleBigNum::new();
     u.w[0] = 1;
     // `u.shl(2*k)` crashes, so perform shl(k) twice
     u.shl(k);
     u.shl(k);
     // div returns floored value
-    let u = u.div(&CurveOrder);
+    let u = u.div(&CURVE_ORDER);
 
     // v = 2^(k+1)
     let mut v = BigNum::new_int(1isize);
@@ -180,7 +179,7 @@ mod test {
         let mut res_mul = BIG::new_int(1 as isize);
         let mut start = Instant::now();
         for b in &bigs {
-            res_mul = BigNum::modmul(&res_mul, &b, &CurveOrder);
+            res_mul = BigNum::modmul(&res_mul, &b, &CURVE_ORDER);
         }
         println!(
             "Multiplication time for {} BIGs = {:?}",
@@ -216,12 +215,12 @@ mod test {
         start = Instant::now();
         for b in &bigs {
             let mut i = b.clone();
-            i.invmodp(&CurveOrder);
+            i.invmodp(&CURVE_ORDER);
             inverses_b.push(i);
         }
         println!("Inverse time for {} BIGs = {:?}", count, start.elapsed());
         for i in 0..count {
-            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &CurveOrder);
+            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &CURVE_ORDER);
             assert_eq!(BigNum::comp(&r, &BigNum::new_int(1 as isize)), 0);
         }
 
@@ -244,7 +243,7 @@ mod test {
         let mut r = bigs[0];
         for i in 0..c {
             r.add(&bigs[i]);
-            r.rmod(&CurveOrder);
+            r.rmod(&CURVE_ORDER);
         }
         println!("Addition time for {} BIGs = {:?}", c, start.elapsed());
 
@@ -297,11 +296,11 @@ mod test {
 
     #[test]
     fn timing_barrett_reduction() {
-        //let (k, u, v) = barrett_reduction_params(&CurveOrder);
+        //let (k, u, v) = barrett_reduction_params(&CURVE_ORDER);
         let (k, u, v) = (
-            *constants::BarrettRedc_k,
-            *constants::BarrettRedc_u,
-            *constants::BarrettRedc_v,
+            *constants::BARRETT_REDC_K,
+            *constants::BARRETT_REDC_U,
+            *constants::BARRETT_REDC_V,
         );
         let mut xs = vec![];
         let mut reduced1 = vec![];
@@ -311,13 +310,13 @@ mod test {
         for _ in 0..count {
             let a: u32 = rng.gen();
             let s = BigNum::new_int(a as isize);
-            let _x = CurveOrder.minus(&s);
+            let _x = CURVE_ORDER.minus(&s);
             xs.push(BigNum::mul(&_x, &_x));
         }
 
         let mut start = Instant::now();
         for x in &xs {
-            let r = barrett_reduction(&x, &CurveOrder, k, &u, &v);
+            let r = barrett_reduction(&x, &CURVE_ORDER, k, &u, &v);
             reduced1.push(r);
         }
         println!("Barrett time = {:?}", start.elapsed());
@@ -325,7 +324,7 @@ mod test {
         start = Instant::now();
         for x in &xs {
             let mut y = x.clone();
-            let z = y.dmod(&CurveOrder);
+            let z = y.dmod(&CURVE_ORDER);
             reduced2.push(z);
         }
         println!("Normal time = {:?}", start.elapsed());
@@ -338,9 +337,9 @@ mod test {
     #[test]
     fn timing_rmod_with_barrett_reduction() {
         let (k, u, v) = (
-            *constants::BarrettRedc_k,
-            *constants::BarrettRedc_u,
-            *constants::BarrettRedc_v,
+            *constants::BARRETT_REDC_K,
+            *constants::BARRETT_REDC_U,
+            *constants::BARRETT_REDC_V,
         );
         let count = 100;
         let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
@@ -350,7 +349,7 @@ mod test {
         let mut start = Instant::now();
         for i in 0..count {
             sum = BigNum::plus(&sum, &bigs[i]);
-            sum.rmod(&CurveOrder)
+            sum.rmod(&CURVE_ORDER)
         }
         println!("rmod time = {:?}", start.elapsed());
 
@@ -358,7 +357,7 @@ mod test {
         start = Instant::now();
         for i in 0..count {
             sum_b = BigNum::plus(&sum_b, &bigs[i]);
-            sum_b = __barrett_reduction__(&sum_b, &CurveOrder, k, &u, &v)
+            sum_b = __barrett_reduction__(&sum_b, &CURVE_ORDER, k, &u, &v)
         }
         println!("Barrett time = {:?}", start.elapsed());
 

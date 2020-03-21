@@ -1,9 +1,8 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::{FieldElement, FieldElementVector};
+use crate::field_elem::FieldElement;
 
-use rayon::prelude::*;
 use std::slice::Iter;
 
 #[macro_export]
@@ -145,6 +144,7 @@ macro_rules! impl_group_elem_traits {
             }
         }
 
+        #[allow(unused_mut)]
         impl fmt::Display for $group_element {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 let mut c = self.value.clone();
@@ -408,8 +408,8 @@ macro_rules! impl_group_element_lookup_table {
         }
 
         impl<'a> From<&'a $group_element> for $name {
-            fn from(A: &'a $group_element) -> Self {
-                let mut Ai: [$group_element; 8] = [
+            fn from(a: &'a $group_element) -> Self {
+            let mut a_i: [$group_element; 8] = [
                     $group_element::new(),
                     $group_element::new(),
                     $group_element::new(),
@@ -419,13 +419,13 @@ macro_rules! impl_group_element_lookup_table {
                     $group_element::new(),
                     $group_element::new(),
                 ];
-                let A2 = A.double();
-                Ai[0] = A.clone();
+                let a_2 = a.double();
+                a_i[0] = a.clone();
                 for i in 0..7 {
-                    Ai[i + 1] = &Ai[i] + &A2;
+                    a_i[i + 1] = &a_i[i] + &a_2;
                 }
                 // Now Ai = [A, 3A, 5A, 7A, 9A, 11A, 13A, 15A]
-                Self(Ai)
+                Self(a_i)
             }
         }
     };
@@ -664,7 +664,7 @@ macro_rules! impl_group_elem_vec_product_ops {
                 group_elems: Vec<&$group_element>,
                 field_elems: Vec<&FieldElement>,
             ) -> Result<$group_element, ValueError> {
-                Self::multi_scalar_mul_var_time_from_ref_vecs(group_elems, field_elems)
+                Self::multi_scalar_mul_var_time_without_precomputation(group_elems, field_elems)
             }
 
             /// Calculates Hadamard product of 2 group element vectors.
@@ -927,9 +927,9 @@ macro_rules! impl_group_elem_vec_conversions {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::constants::GroupG1_SIZE;
+    use crate::constants::GROUP_G1_SIZE;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::constants::{GroupG2_SIZE, GroupGT_SIZE};
+    use crate::constants::{GROUP_G2_SIZE, GROUP_GT_SIZE};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::extension_field_gt::GT;
     use crate::group_elem_g1::{G1LookupTable, G1Vector, G1};
@@ -966,7 +966,7 @@ mod test {
             };
         }
 
-        to_and_fro_bytes!(G1, GroupG1_SIZE);
+        to_and_fro_bytes!(G1, GROUP_G1_SIZE);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         to_and_fro_bytes!(G2, GroupG2_SIZE);
         #[cfg(any(feature = "bls381", feature = "bn254"))]

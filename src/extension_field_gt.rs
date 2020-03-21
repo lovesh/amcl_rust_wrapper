@@ -3,19 +3,19 @@ use crate::types::GroupGT;
 use super::ECCurve::fp12::{DENSE, FP12};
 use super::ECCurve::fp4::FP4;
 use super::ECCurve::pair::{another, ate, ate2, fexp, initmp, miller};
-use crate::constants::GroupGT_SIZE;
+use crate::constants::GROUP_GT_SIZE;
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
-use crate::group_elem_g2::{parse_hex_as_FP2, G2};
+use crate::group_elem_g2::{parse_hex_as_fp2, G2};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Mul;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
-use std::str::{FromStr, SplitWhitespace};
+use serde::ser::{Serialize, Serializer};
+use std::str::SplitWhitespace;
 use zeroize::Zeroize;
 
 #[derive(Clone)]
@@ -132,16 +132,16 @@ impl GT {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut temp = FP12::new();
         temp.copy(&self.value);
-        let mut bytes: [u8; GroupGT_SIZE] = [0; GroupGT_SIZE];
+        let mut bytes: [u8; GROUP_GT_SIZE] = [0; GROUP_GT_SIZE];
         temp.tobytes(&mut bytes);
         bytes.to_vec()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != GroupGT_SIZE {
+        if bytes.len() != GROUP_GT_SIZE {
             return Err(SerzDeserzError::GTBytesIncorrectSize(
                 bytes.len(),
-                GroupGT_SIZE,
+                GROUP_GT_SIZE,
             ));
         }
         Ok(Self {
@@ -152,10 +152,10 @@ impl GT {
     /// Writes bytes to given slice. Raises exception when given slice is not of
     /// desired length.
     pub fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
-        if target.len() != GroupGT_SIZE {
+        if target.len() != GROUP_GT_SIZE {
             return Err(SerzDeserzError::GTBytesIncorrectSize(
                 target.len(),
-                GroupGT_SIZE,
+                GROUP_GT_SIZE,
             ));
         }
         let mut temp = FP12::new();
@@ -178,9 +178,9 @@ impl GT {
 
     pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
         let mut iter = s.split_whitespace();
-        let a = parse_hex_as_FP4(&mut iter)?;
-        let b = parse_hex_as_FP4(&mut iter)?;
-        let c = parse_hex_as_FP4(&mut iter)?;
+        let a = parse_hex_as_fp4(&mut iter)?;
+        let b = parse_hex_as_fp4(&mut iter)?;
+        let c = parse_hex_as_fp4(&mut iter)?;
         let mut value = FP12::new();
         value.seta(a);
         value.setb(b);
@@ -199,13 +199,13 @@ impl GT {
 }
 
 /// Parse given hex string as FP4
-pub fn parse_hex_as_FP4(iter: &mut SplitWhitespace) -> Result<FP4, SerzDeserzError> {
+pub fn parse_hex_as_fp4(iter: &mut SplitWhitespace) -> Result<FP4, SerzDeserzError> {
     // Logic almost copied from AMCL but with error handling and constant time execution.
     // Constant time is important as hex is used during serialization and deserialization.
     // A seemingly effortless solution is to filter string for errors and pad with 0s before
     // passing to AMCL but that would be expensive as the string is scanned twice
-    let a = parse_hex_as_FP2(iter)?;
-    let b = parse_hex_as_FP2(iter)?;
+    let a = parse_hex_as_fp2(iter)?;
+    let b = parse_hex_as_fp2(iter)?;
     let mut fp4 = FP4::new();
     fp4.seta(a);
     fp4.setb(b);
@@ -218,7 +218,7 @@ impl PartialEq for GT {
     }
 }
 
-impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
+impl_group_elem_conversions!(GT, GroupGT, GROUP_GT_SIZE);
 
 impl_group_elem_traits!(GT, GroupGT);
 

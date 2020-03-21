@@ -1,4 +1,4 @@
-use crate::constants::{CurveOrder, GroupG1_SIZE};
+use crate::constants::{CURVE_ORDER, GROUP_G1_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
@@ -13,7 +13,7 @@ use std::slice::Iter;
 use crate::rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::ser::{Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};
 use zeroize::Zeroize;
 
@@ -53,26 +53,26 @@ impl GroupElement for G1 {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes: [u8; GroupG1_SIZE] = [0; GroupG1_SIZE];
+        let mut bytes: [u8; GROUP_G1_SIZE] = [0; GROUP_G1_SIZE];
         self.write_to_slice_unchecked(&mut bytes);
         bytes.to_vec()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != GroupG1_SIZE {
+        if bytes.len() != GROUP_G1_SIZE {
             return Err(SerzDeserzError::G1BytesIncorrectSize(
                 bytes.len(),
-                GroupG1_SIZE,
+                GROUP_G1_SIZE,
             ));
         }
         Ok(GroupG1::frombytes(bytes).into())
     }
 
     fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
-        if target.len() != GroupG1_SIZE {
+        if target.len() != GROUP_G1_SIZE {
             return Err(SerzDeserzError::G1BytesIncorrectSize(
                 target.len(),
-                GroupG1_SIZE,
+                GROUP_G1_SIZE,
             ));
         }
         self.write_to_slice_unchecked(target);
@@ -125,9 +125,9 @@ impl GroupElement for G1 {
 
     fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
         let mut iter = s.split_whitespace();
-        let x = parse_hex_as_FP(&mut iter)?;
-        let y = parse_hex_as_FP(&mut iter)?;
-        let z = parse_hex_as_FP(&mut iter)?;
+        let x = parse_hex_as_fp(&mut iter)?;
+        let y = parse_hex_as_fp(&mut iter)?;
+        let z = parse_hex_as_fp(&mut iter)?;
         let mut value = GroupG1::new();
         value.setpx(x);
         value.setpy(y);
@@ -146,7 +146,7 @@ impl GroupElement for G1 {
     }
 
     fn has_correct_order(&self) -> bool {
-        return self.value.mul(&CurveOrder).is_infinity();
+        return self.value.mul(&CURVE_ORDER).is_infinity();
     }
 }
 
@@ -163,7 +163,7 @@ impl G1 {
 
 impl_group_elem_traits!(G1, GroupG1);
 
-impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
+impl_group_elem_conversions!(G1, GroupG1, GROUP_G1_SIZE);
 
 impl_group_elem_ops!(G1);
 
@@ -171,7 +171,7 @@ impl_scalar_mul_ops!(G1);
 
 impl_group_element_lookup_table!(G1, G1LookupTable);
 
-/// Represents an element of the sub-group of the elliptic curve over the prime field
+// Represents an element of the sub-group of the elliptic curve over the prime field
 impl_optmz_scalar_mul_ops!(G1, GroupG1, G1LookupTable);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -186,7 +186,7 @@ impl_group_elem_vec_product_ops!(G1, G1Vector, G1LookupTable);
 impl_group_elem_vec_conversions!(G1, G1Vector);
 
 /// Parse given hex string as FP
-pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError> {
+pub fn parse_hex_as_fp(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError> {
     // Logic almost copied from AMCL but with error handling and constant time execution.
     // Constant time is important as hex is used during serialization and deserialization.
     // A seemingly effortless solution is to filter string for errors and pad with 0s before

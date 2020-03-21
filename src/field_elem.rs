@@ -1,12 +1,11 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::constants::{
-    BarrettRedc_k, BarrettRedc_u, BarrettRedc_v, BigNumBits, CurveOrder, FieldElement_SIZE, NLEN,
+    BARRETT_REDC_K, BARRETT_REDC_U, BARRETT_REDC_V, BIG_NUM_BITS, CURVE_ORDER, FIELD_ELEMENT_SIZE, NLEN,
 };
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum, Limb};
-use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
-use amcl::arch::CHUNK;
+use crate::utils::{barrett_reduction, get_seeded_rng, get_seeded_rng_with_rng, hash_msg};
 use amcl::rand::RAND;
 use std::cmp::Ordering;
 use std::fmt;
@@ -15,7 +14,7 @@ use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, RangeBounds, Sub, SubA
 use std::slice::Iter;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
+use serde::ser::{Serialize, Serializer};
 
 use crate::rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
@@ -47,7 +46,7 @@ impl fmt::Display for FieldElement {
 
 impl Hash for FieldElement {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut bytes: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+        let mut bytes: [u8; FIELD_ELEMENT_SIZE] = [0; FIELD_ELEMENT_SIZE];
         self.write_to_slice_unchecked(&mut bytes);
         state.write(&bytes)
     }
@@ -118,31 +117,31 @@ impl FieldElement {
 
     /// Return bytes in MSB form
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+        let mut bytes: [u8; FIELD_ELEMENT_SIZE] = [0; FIELD_ELEMENT_SIZE];
         self.write_to_slice_unchecked(&mut bytes);
         bytes.to_vec()
     }
 
     /// Expects bytes in MSB form
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != FieldElement_SIZE {
+        if bytes.len() != FIELD_ELEMENT_SIZE {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 bytes.len(),
-                FieldElement_SIZE,
+                FIELD_ELEMENT_SIZE,
             ));
         }
         let mut n = BigNum::frombytes(bytes);
-        n.rmod(&CurveOrder);
+        n.rmod(&CURVE_ORDER);
         Ok(Self { value: n })
     }
 
     /// Writes bytes in MSB form to given slice. Raises exception when given slice is not of
     /// desired length.
     pub fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
-        if target.len() != FieldElement_SIZE {
+        if target.len() != FIELD_ELEMENT_SIZE {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 target.len(),
-                FieldElement_SIZE,
+                FIELD_ELEMENT_SIZE,
             ));
         }
         self.write_to_slice_unchecked(target);
@@ -158,7 +157,7 @@ impl FieldElement {
 
     pub fn to_bignum(&self) -> BigNum {
         let mut v = self.value.clone();
-        v.rmod(&CurveOrder);
+        v.rmod(&CURVE_ORDER);
         v
     }
 
@@ -177,31 +176,31 @@ impl FieldElement {
     pub fn add_assign_(&mut self, b: &Self) {
         // Not using `self.plus` to avoid cloning. Breaking the abstraction a bit for performance.
         self.value.add(&b.value);
-        self.value.rmod(&CurveOrder);
+        self.value.rmod(&CURVE_ORDER);
     }
 
     /// Subtract a field element from itself. `self = self - b`
     pub fn sub_assign_(&mut self, b: &Self) {
         // Not using `self.minus` to avoid cloning. Breaking the abstraction a bit for performance.
-        let neg_b = BigNum::modneg(&b.value, &CurveOrder);
+        let neg_b = BigNum::modneg(&b.value, &CURVE_ORDER);
         self.value.add(&neg_b);
-        self.value.rmod(&CurveOrder);
+        self.value.rmod(&CURVE_ORDER);
     }
 
     /// Return sum of a field element and itself. `self + b`
     pub fn plus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         sum.add(&b.value);
-        sum.rmod(&CurveOrder);
+        sum.rmod(&CURVE_ORDER);
         sum.into()
     }
 
     /// Return difference of a field element and itself. `self - b`
     pub fn minus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
-        let neg_b = BigNum::modneg(&b.value, &CurveOrder);
+        let neg_b = BigNum::modneg(&b.value, &CURVE_ORDER);
         sum.add(&neg_b);
-        sum.rmod(&CurveOrder);
+        sum.rmod(&CURVE_ORDER);
         sum.into()
     }
 
@@ -218,10 +217,10 @@ impl FieldElement {
         Self::reduce_dmod_curve_order(&d).into()
     }
 
-    /// Exponentiation modulo curve order, i.e. self^exp % CurveOrder
+    /// Exponentiation modulo curve order, i.e. self^exp % CURVE_ORDER
     pub fn pow(&self, exp: &Self) -> Self {
         let mut base = self.value.clone();
-        let res = base.powmod(&exp.value, &CurveOrder);
+        let res = base.powmod(&exp.value, &CURVE_ORDER);
         res.into()
     }
 
@@ -243,7 +242,7 @@ impl FieldElement {
             return Self::zero();
         }
         let mut inv = self.value.clone();
-        inv.invmodp(&CurveOrder);
+        inv.invmodp(&CURVE_ORDER);
         inv.into()
     }
 
@@ -252,7 +251,7 @@ impl FieldElement {
         if self.is_zero() {
             self.value = BigNum::new();
         } else {
-            self.value.invmodp(&CurveOrder);
+            self.value.invmodp(&CURVE_ORDER);
         }
     }
 
@@ -311,7 +310,7 @@ impl FieldElement {
         for mut bit_vec in bit_vecs.drain(..) {
             let len = bit_vec.len();
             bits.append(&mut bit_vec);
-            bits.append(&mut vec![0; BigNumBits - len]);
+            bits.append(&mut vec![0; BIG_NUM_BITS - len]);
         }
         bits
     }
@@ -320,21 +319,21 @@ impl FieldElement {
     fn random_field_element_using_rng<R: RngCore + CryptoRng>(rng: &mut R) -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
         let entropy_size = 256;
-        let mut r = get_seeded_RNG_with_rng(entropy_size, rng);
-        Self::get_big_num_from_RAND(&mut r)
+        let mut r = get_seeded_rng_with_rng(entropy_size, rng);
+        Self::get_big_num_from_rand(&mut r)
     }
 
     fn random_field_element() -> BigNum {
         // initialise from at least 128 byte string of raw random entropy
         let entropy_size = 256;
-        let mut r = get_seeded_RNG(entropy_size);
-        Self::get_big_num_from_RAND(&mut r)
+        let mut r = get_seeded_rng(entropy_size);
+        Self::get_big_num_from_rand(&mut r)
     }
 
-    fn get_big_num_from_RAND(r: &mut RAND) -> BigNum {
-        let mut n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), r);
+    fn get_big_num_from_rand(r: &mut RAND) -> BigNum {
+        let mut n = BigNum::randomnum(&BigNum::new_big(&CURVE_ORDER), r);
         while n.iszilch() {
-            n = BigNum::randomnum(&BigNum::new_big(&CurveOrder), r);
+            n = BigNum::randomnum(&BigNum::new_big(&CURVE_ORDER), r);
         }
         n
     }
@@ -465,14 +464,14 @@ impl FieldElement {
     /// Create big number from hex string in big endian
     pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
         let mut f = Self::parse_hex_as_bignum(s)?;
-        f.rmod(&CurveOrder);
+        f.rmod(&CURVE_ORDER);
         Ok(f.into())
     }
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
-        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
-        barrett_reduction(&x, &CurveOrder, k, &u, &v)
+        let (k, u, v) = (*BARRETT_REDC_K, *BARRETT_REDC_U, *BARRETT_REDC_V);
+        barrett_reduction(&x, &CURVE_ORDER, k, &u, &v)
     }
 
     /// Parse given hex string as BigNum in constant time.
@@ -484,15 +483,15 @@ impl FieldElement {
 
         let mut val = val;
         // Given hex cannot be bigger than max byte size
-        if val.len() > FieldElement_SIZE * 2 {
+        if val.len() > FIELD_ELEMENT_SIZE * 2 {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
                 val.len(),
-                FieldElement_SIZE,
+                FIELD_ELEMENT_SIZE,
             ));
         }
 
         // Pad the string for constant time parsing.
-        while val.len() < FieldElement_SIZE * 2 {
+        while val.len() < FIELD_ELEMENT_SIZE * 2 {
             val.insert(0, '0');
         }
 
@@ -583,10 +582,10 @@ impl From<BigNum> for FieldElement {
     }
 }
 
-impl From<&[u8; FieldElement_SIZE]> for FieldElement {
-    fn from(x: &[u8; FieldElement_SIZE]) -> Self {
+impl From<&[u8; FIELD_ELEMENT_SIZE]> for FieldElement {
+    fn from(x: &[u8; FIELD_ELEMENT_SIZE]) -> Self {
         let mut n = BigNum::frombytes(x);
-        n.rmod(&CurveOrder);
+        n.rmod(&CURVE_ORDER);
         Self { value: n }
     }
 }
@@ -1026,7 +1025,7 @@ mod test {
         for _ in 0..100 {
             let x = FieldElement::random_using_rng(&mut rng);
 
-            let mut bytes_x: [u8; FieldElement_SIZE] = [0; FieldElement_SIZE];
+            let mut bytes_x: [u8; FIELD_ELEMENT_SIZE] = [0; FIELD_ELEMENT_SIZE];
             x.write_to_slice(&mut bytes_x).unwrap();
             let y = FieldElement::from(&bytes_x);
             assert_eq!(x, y);
@@ -1289,11 +1288,11 @@ mod test {
     #[test]
     fn test_to_bits() {
         let mut bits = vec![0, 1, 0, 1];
-        bits.append(&mut vec![0; BigNumBits - 4]);
+        bits.append(&mut vec![0; BIG_NUM_BITS - 4]);
         assert_eq!(FieldElement::from(10u32).to_bits(), bits);
 
         let mut bits = vec![0, 0, 1, 0, 0, 1, 1];
-        bits.append(&mut vec![0; BigNumBits - 7]);
+        bits.append(&mut vec![0; BIG_NUM_BITS - 7]);
         assert_eq!(FieldElement::from(100u32).to_bits(), bits);
 
         let mut c = vec![0i64; NLEN];
@@ -1301,9 +1300,9 @@ mod test {
         c[1] = 100;
         let m: FieldElement = BigNum::new_ints(&c).into();
         let mut bits = vec![0, 1];
-        bits.append(&mut vec![0; BigNumBits - 2]);
+        bits.append(&mut vec![0; BIG_NUM_BITS - 2]);
         bits.append(&mut vec![0, 0, 1, 0, 0, 1, 1]);
-        bits.append(&mut vec![0; BigNumBits - 7]);
+        bits.append(&mut vec![0; BIG_NUM_BITS - 7]);
         assert_eq!(m.to_bits(), bits);
     }
 
@@ -1489,15 +1488,15 @@ mod test {
         let mut o1 = vec![];
         let mut o2 = vec![];
 
-        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
+        let (k, u, v) = (*BARRETT_REDC_K, *BARRETT_REDC_U, *BARRETT_REDC_V);
         let mut start = Instant::now();
         for i in 0..count {
             let mut a = l[i].clone();
-            a.rmod(&CurveOrder);
+            a.rmod(&CURVE_ORDER);
             let mut b = r[i].clone();
-            b.rmod(&CurveOrder);
+            b.rmod(&CURVE_ORDER);
             let d = BigNum::mul(&a, &b);
-            o1.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
+            o1.push(barrett_reduction(&d, &CURVE_ORDER, k, &u, &v));
         }
         println!("Mul1 for {} elems = {:?}", count, start.elapsed());
 
@@ -1506,7 +1505,7 @@ mod test {
             let a = l[i].clone();
             let b = r[i].clone();
             let d = BigNum::mul(&a, &b);
-            o2.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
+            o2.push(barrett_reduction(&d, &CURVE_ORDER, k, &u, &v));
         }
         println!("Mul2 for {} elems = {:?}", count, start.elapsed());
 
@@ -1517,11 +1516,11 @@ mod test {
         let mut x = BigNum::new_int(1isize);
         start = Instant::now();
         for i in 0..count {
-            x.rmod(&CurveOrder);
+            x.rmod(&CURVE_ORDER);
             let mut b = o1[i].clone();
-            b.rmod(&CurveOrder);
+            b.rmod(&CURVE_ORDER);
             let d = BigNum::mul(&x, &b);
-            x = barrett_reduction(&d, &CurveOrder, k, &u, &v);
+            x = barrett_reduction(&d, &CURVE_ORDER, k, &u, &v);
         }
         println!("Mul1 all for {} elems = {:?}", count, start.elapsed());
 
@@ -1530,7 +1529,7 @@ mod test {
         for i in 0..count {
             let b = o2[i].clone();
             let d = BigNum::mul(&y, &b);
-            y = barrett_reduction(&d, &CurveOrder, k, &u, &v);
+            y = barrett_reduction(&d, &CURVE_ORDER, k, &u, &v);
         }
         println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
 
@@ -1562,13 +1561,13 @@ mod test {
 
         let start = Instant::now();
         for i in 0..count {
-            BigNum::modmul(&nums[i], &nums[i], &CurveOrder);
+            BigNum::modmul(&nums[i], &nums[i], &CURVE_ORDER);
         }
         println!("Mul time for {} big nums = {:?}", count, start.elapsed());
 
         let start = Instant::now();
         for i in 0..count {
-            BigNum::modsqr(&nums[i], &CurveOrder);
+            BigNum::modsqr(&nums[i], &CURVE_ORDER);
         }
         println!("Sqr time for {} big nums = {:?}", count, start.elapsed());
     }
@@ -1591,13 +1590,13 @@ mod test {
         let mut h = r1.to_hex();
         // Make hex string bigger
         h.insert(0, '0');
-        assert!(h.len() > FieldElement_SIZE * 2);
+        assert!(h.len() > FIELD_ELEMENT_SIZE * 2);
         assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
 
         let mut h = r1.to_hex();
         // Add non hex character
         h = h.replacen("0", "G", 1);
-        assert_eq!(h.len(), FieldElement_SIZE * 2);
+        assert_eq!(h.len(), FIELD_ELEMENT_SIZE * 2);
         assert!(FieldElement::parse_hex_as_bignum(h.clone()).is_err());
     }
 
