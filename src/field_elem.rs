@@ -537,6 +537,7 @@ impl FieldElement {
         }
     }
 
+    /// Use this instead of static ref and new_int. This allows for initialization at compile time
     pub const fn from_array(w: [Limb; NLEN]) -> FieldElement {
         FieldElement { value: BigNum { w } }
     }
