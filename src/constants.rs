@@ -13,13 +13,14 @@ pub const FIELD_ELEMENT_SIZE: usize = MODBYTES;
 // Byte size of element in group G1, 1 extra byte for compression flag
 pub const GROUP_G1_SIZE: usize = (2 * MODBYTES + 1) as usize;
 
+pub const MODULUS: BigNum = BigNum{ w: rom::MODULUS };
+
 lazy_static! {
     pub static ref GENERATOR_G1: GroupG1 = GroupG1::generator();
-    pub static ref MODULUS: BigNum = BigNum::new_ints(&rom::MODULUS);
     pub static ref MODULUS_BITS: usize = MODULUS.nbits();
     pub static ref CURVE_ORDER: BigNum = BigNum::new_ints(&rom::CURVE_ORDER);
     pub static ref MODULUS_MINUS_1_DIV_2: BigNum = {
-        let mut order = BigNum::new_ints(&rom::MODULUS);
+        let mut order = MODULUS;
         order.dec(1);
         order.shr(1);
         order
@@ -49,3 +50,4 @@ lazy_static! {
 
 #[cfg(any(feature = "bls381", feature = "bn254"))]
 pub use crate::types_g2::{GENERATOR_G2, GROUP_G2_SIZE, GROUP_GT_SIZE};
+
