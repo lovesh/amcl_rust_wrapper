@@ -293,7 +293,7 @@ mod test {
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1_identity, &g2),
         );
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         // e(g1, g2 + identity) == e(g1, g2)*e(g1, identity)
         let lhs = GT::ate_pairing(&g1, &(&g2 + &g2_identity));
@@ -301,7 +301,7 @@ mod test {
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1, &g2_identity),
         );
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         let h1 = G1::random();
         let h2 = G2::random();
@@ -312,7 +312,7 @@ mod test {
             &GT::ate_pairing(&g1_identity, &h2),
         );
         let rhs = GT::ate_pairing(&g1, &g2);
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         // e(identity, g2)*e(h1, h2) == e(h1, h2)
         let lhs = GT::product(
@@ -320,15 +320,15 @@ mod test {
             &GT::ate_pairing(&h1, &h2),
         );
         let rhs = GT::ate_pairing(&h1, &h2);
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         assert!(GT::ate_pairing(&g1_identity, &g2_identity).is_one());
 
         // 2-pairing
-        assert!(GT::ate_2_pairing(&g1, &g2, &g1_identity, &h2) == GT::ate_pairing(&g1, &g2));
-        assert!(GT::ate_2_pairing(&g1, &g2, &h1, &g2_identity) == GT::ate_pairing(&g1, &g2));
-        assert!(GT::ate_2_pairing(&g1_identity, &g2, &h1, &h2) == GT::ate_pairing(&h1, &h2));
-        assert!(GT::ate_2_pairing(&g1, &g2_identity, &h1, &h2) == GT::ate_pairing(&h1, &h2));
+        assert_eq!(GT::ate_2_pairing(&g1, &g2, &g1_identity, &h2), GT::ate_pairing(&g1, &g2));
+        assert_eq!(GT::ate_2_pairing(&g1, &g2, &h1, &g2_identity), GT::ate_pairing(&g1, &g2));
+        assert_eq!(GT::ate_2_pairing(&g1_identity, &g2, &h1, &h2), GT::ate_pairing(&h1, &h2));
+        assert_eq!(GT::ate_2_pairing(&g1, &g2_identity, &h1, &h2), GT::ate_pairing(&h1, &h2));
         assert!(GT::ate_2_pairing(&g1_identity, &g2_identity, &g1_identity, &g2_identity).is_one());
 
         let k1 = G1::random();
@@ -373,20 +373,20 @@ mod test {
         // e(g1, -g2) == e(-g1, g2)
         let lhs = GT::ate_pairing(&g1, &g2_neg);
         let rhs = GT::ate_pairing(&g1_neg, &g2);
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         // e(g1, -g2) == e(-g1, g2) == e(g1, g2)^-1
         let e = GT::ate_pairing(&g1, &g2);
         let e_inv = e.inverse();
-        assert!(lhs == e_inv);
+        assert_eq!(lhs, e_inv);
 
         let p = GT::ate_pairing(&g1, &g2);
 
         // e(g1, g2) = e(-g1, g2)^-1 => e(g1, g2) * e(-g1, g2) == 1
-        assert!(GT::product(&p, &lhs) == GT::one());
+        assert_eq!(GT::product(&p, &lhs), GT::one());
 
         // e(g1, g2) = e(g1, -g2)^-1 => e(g1, g2) * e(g1, -g2) == 1
-        assert!(GT::product(&p, &rhs) == GT::one());
+        assert_eq!(GT::product(&p, &rhs), GT::one());
     }
 
     #[test]
@@ -477,10 +477,10 @@ mod test {
             count,
             start.elapsed()
         );
-        assert!(accum == multi);
+        assert_eq!(accum, multi);
 
         let ip = GT::inner_product(&g1_vec, &g2_vec).unwrap();
-        assert!(accum == ip);
+        assert_eq!(accum, ip);
     }
 
     #[test]
