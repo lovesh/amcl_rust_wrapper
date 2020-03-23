@@ -13,12 +13,13 @@ pub const FIELD_ELEMENT_SIZE: usize = MODBYTES;
 // Byte size of element in group G1, 1 extra byte for compression flag
 pub const GROUP_G1_SIZE: usize = (2 * MODBYTES + 1) as usize;
 
-pub const MODULUS: BigNum = BigNum{ w: rom::MODULUS };
+pub const MODULUS: BigNum = BigNum { w: rom::MODULUS };
+pub const CURVE_ORDER: BigNum = BigNum { w: rom::CURVE_ORDER };
+pub const FIELD_ELEMENT_ZERO: BigNum = BigNum { w: [0; NLEN] };
 
 lazy_static! {
     pub static ref GENERATOR_G1: GroupG1 = GroupG1::generator();
     pub static ref MODULUS_BITS: usize = MODULUS.nbits();
-    pub static ref CURVE_ORDER: BigNum = BigNum::new_ints(&rom::CURVE_ORDER);
     pub static ref MODULUS_MINUS_1_DIV_2: BigNum = {
         let mut order = MODULUS;
         order.dec(1);
@@ -26,7 +27,6 @@ lazy_static! {
         order
     };
     pub static ref CURVE_ORDER_BIT_SIZE: usize = CURVE_ORDER.nbits();
-    pub static ref FIELD_ELEMENT_ZERO: BigNum = BigNum::new();
     pub static ref BARRETT_REDC_K: usize = MODULUS.nbits();
     pub static ref BARRETT_REDC_U: BigNum = {
         let k = MODULUS.nbits();
