@@ -46,7 +46,11 @@ pub trait GroupElement: Clone + Sized {
     fn set_to_identity(&mut self);
 
     /// Hash an arbitrary sized message using SHAKE and return output as group element
+    #[deprecated(since = "0.4.0", note = "Please use `hash_to_curve` instead")]
     fn from_msg_hash(msg: &[u8]) -> Self;
+
+    /// Uses IETF constant time hash_to_curve method to map data to a point
+    fn hash_to_curve(msg: &[u8], dst: &hash2curve::DomainSeparationTag) -> Self;
 
     /// Return byte representation as vector
     fn to_bytes(&self) -> Vec<u8>;

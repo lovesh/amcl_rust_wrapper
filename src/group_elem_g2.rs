@@ -54,6 +54,11 @@ impl GroupElement for G2 {
         GroupG2::mapit(&hash_msg(msg)).into()
     }
 
+    /// TODO: call the appropriate function once implemented in `hash2curve` crate
+    fn hash_to_curve(_msg: &[u8], _dst: &hash2curve::DomainSeparationTag) -> Self {
+        unimplemented!();
+    }
+
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes: [u8; GROUP_G2_SIZE] = [0; GROUP_G2_SIZE];
         self.write_to_slice_unchecked(&mut bytes);

@@ -16,6 +16,7 @@ use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};
 use zeroize::Zeroize;
+use hash2curve::HashToCurveXmd;
 
 #[derive(Clone, Debug)]
 pub struct G1 {
@@ -50,6 +51,14 @@ impl GroupElement for G1 {
 
     fn from_msg_hash(msg: &[u8]) -> Self {
         GroupG1::mapit(&hash_msg(msg)).into()
+    }
+
+    fn hash_to_curve(msg: &[u8], dst: &hash2curve::DomainSeparationTag) -> Self {
+        let hasher = hash2curve::bls381g1::Bls12381G1Sswu::new(dst.clone());
+        match hasher.hash_to_curve_xmd::<sha3::Sha3_256, &[u8]>(msg) {
+            Ok(p) => p.into(),
+            Err(_) => Self::identity()
+        }
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -214,6 +223,16 @@ pub fn parse_hex_as_fp(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
 mod test {
     use super::*;
     use std::time::Instant;
+    use hash2curve::DomainSeparationTag;
+
+    #[test]
+    fn test_hash_to_curve() {
+        let e = G1::from_hex("1 0546197CDBA187E858730894C66FAEB35E7DBE4C61646786FB85B3EBB78377B1711797A884CBE8302A23463FFFD00190 1 11CF30309EA1AF4BB47FC4D5219529347F9576201EE34DE933C96F83FBB8B2AC22387B593C5F148924B571FE605B337F 2 13317C30F3A0D636D56A23C34FDD80B891ECBDE7C2B7D6E16B0F4B0B7E6D26CB6147ACDE629C4A23C57400D203A9FB84".to_string()).unwrap();
+        let dst = DomainSeparationTag::new("hash_to_curve_", Some("test"), None, None).unwrap();
+        let g = G1::hash_to_curve(b"message to be hashed", &dst);
+        assert!(!g.is_identity());
+        assert_eq!(e, g);
+    }
 
     #[test]
     fn test_parse_hex_for_fp() {
