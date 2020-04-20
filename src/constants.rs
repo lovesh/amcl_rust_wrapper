@@ -29,7 +29,7 @@ lazy_static! {
     pub static ref CURVE_ORDER_BIT_SIZE: usize = CURVE_ORDER.nbits();
     pub static ref BARRETT_REDC_K: usize = MODULUS.nbits();
     pub static ref BARRETT_REDC_U: BigNum = {
-        let k = MODULUS.nbits();
+        let k = CURVE_ORDER.nbits();
         let mut u = DoubleBigNum::new();
         u.w[0] = 1;
         // `u.shl(2*k)` crashes, so perform shl(k) twice
@@ -37,11 +37,11 @@ lazy_static! {
         u.shl(k);
 
         // div returns floored value
-        u.div(&MODULUS)
+        u.div(&CURVE_ORDER)
     };
 
     pub static ref BARRETT_REDC_V: BigNum = {
-        let k = MODULUS.nbits();
+        let k = CURVE_ORDER.nbits();
         let mut v = BigNum::new_int(1isize);
         v.shl(k+1);
         v

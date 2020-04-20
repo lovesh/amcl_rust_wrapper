@@ -1,8 +1,8 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::constants::{
-    BARRETT_REDC_K, BARRETT_REDC_U, BARRETT_REDC_V, BIG_NUM_BITS, MODULUS, FIELD_ELEMENT_SIZE, NLEN,
-    MODULUS_MINUS_1_DIV_2
+    BARRETT_REDC_K, BARRETT_REDC_U, BARRETT_REDC_V, BIG_NUM_BITS, CURVE_ORDER, FIELD_ELEMENT_SIZE, NLEN,
+    CURVE_ORDER_MINUS_1_DIV_2
 };
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::signum::Sgn0;
@@ -133,7 +133,7 @@ impl FieldElement {
             ));
         }
         let mut n = BigNum::frombytes(bytes);
-        n.rmod(&MODULUS);
+        n.rmod(&CURVE_ORDER);
         Ok(Self { value: n })
     }
 
@@ -159,7 +159,7 @@ impl FieldElement {
 
     pub fn to_bignum(&self) -> BigNum {
         let mut v = self.value.clone();
-        v.rmod(&MODULUS);
+        v.rmod(&CURVE_ORDER);
         v
     }
 
@@ -178,51 +178,51 @@ impl FieldElement {
     pub fn add_assign_(&mut self, b: &Self) {
         // Not using `self.plus` to avoid cloning. Breaking the abstraction a bit for performance.
         self.value.add(&b.value);
-        self.value.rmod(&MODULUS);
+        self.value.rmod(&CURVE_ORDER);
     }
 
     /// Subtract a field element from itself. `self = self - b`
     pub fn sub_assign_(&mut self, b: &Self) {
         // Not using `self.minus` to avoid cloning. Breaking the abstraction a bit for performance.
-        let neg_b = BigNum::modneg(&b.value, &MODULUS);
+        let neg_b = BigNum::modneg(&b.value, &CURVE_ORDER);
         self.value.add(&neg_b);
-        self.value.rmod(&MODULUS);
+        self.value.rmod(&CURVE_ORDER);
     }
 
     /// Return sum of a field element and itself. `self + b`
     pub fn plus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         sum.add(&b.value);
-        sum.rmod(&MODULUS);
+        sum.rmod(&CURVE_ORDER);
         sum.into()
     }
 
     /// Return difference of a field element and itself. `self - b`
     pub fn minus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
-        let neg_b = BigNum::modneg(&b.value, &MODULUS);
+        let neg_b = BigNum::modneg(&b.value, &CURVE_ORDER);
         sum.add(&neg_b);
-        sum.rmod(&MODULUS);
+        sum.rmod(&CURVE_ORDER);
         sum.into()
     }
 
     /// Multiply 2 field elements modulus the order of the curve.
-    /// (field_element_a * field_element_b) % modulus
+    /// (field_element_a * field_element_b) % curve_order
     pub fn multiply(&self, b: &Self) -> Self {
         let d = BigNum::mul(&self.value, &b.value);
         Self::reduce_dmod_curve_order(&d).into()
     }
 
-    /// Calculate square of a field element modulo the curve order, i.e `a^2 % MODULUS`
+    /// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
     pub fn square(&self) -> Self {
         let d = BigNum::sqr(&self.value);
         Self::reduce_dmod_curve_order(&d).into()
     }
 
-    /// Exponentiation modulo curve order, i.e. self^exp % MODULUS
+    /// Exponentiation modulo curve order, i.e. self^exp % CURVE_ORDER
     pub fn pow(&self, exp: &Self) -> Self {
         let mut base = self.value.clone();
-        let res = base.powmod(&exp.value, &MODULUS);
+        let res = base.powmod(&exp.value, &CURVE_ORDER);
         res.into()
     }
 
@@ -237,14 +237,14 @@ impl FieldElement {
         self.value = zero.minus(&self).value;
     }
 
-    /// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % MODULUS`
+    /// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % curve_order`
     pub fn inverse(&self) -> Self {
         // Violating constant time guarantee until bug fixed in amcl
         if self.is_zero() {
             return Self::zero();
         }
         let mut inv = self.value.clone();
-        inv.invmodp(&MODULUS);
+        inv.invmodp(&CURVE_ORDER);
         inv.into()
     }
 
@@ -253,7 +253,7 @@ impl FieldElement {
         if self.is_zero() {
             self.value = BigNum::new();
         } else {
-            self.value.invmodp(&MODULUS);
+            self.value.invmodp(&CURVE_ORDER);
         }
     }
 
@@ -333,9 +333,9 @@ impl FieldElement {
     }
 
     fn get_big_num_from_rand(r: &mut RAND) -> BigNum {
-        let mut n = BigNum::randomnum(&BigNum::new_big(&MODULUS), r);
+        let mut n = BigNum::randomnum(&BigNum::new_big(&CURVE_ORDER), r);
         while n.iszilch() {
-            n = BigNum::randomnum(&BigNum::new_big(&MODULUS), r);
+            n = BigNum::randomnum(&BigNum::new_big(&CURVE_ORDER), r);
         }
         n
     }
@@ -466,14 +466,14 @@ impl FieldElement {
     /// Create big number from hex string in big endian
     pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
         let mut f = Self::parse_hex_as_bignum(s)?;
-        f.rmod(&MODULUS);
+        f.rmod(&CURVE_ORDER);
         Ok(f.into())
     }
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
         let (k, u, v) = (*BARRETT_REDC_K, *BARRETT_REDC_U, *BARRETT_REDC_V);
-        barrett_reduction(&x, &MODULUS, k, &u, &v)
+        barrett_reduction(&x, &CURVE_ORDER, k, &u, &v)
     }
 
     /// Parse given hex string as BigNum in constant time.
@@ -522,7 +522,7 @@ impl FieldElement {
     /// "sign" of x, where sgn0(x) == -1 just when x is "negative".  In
     /// other words, this function always considers 0 to be positive.
     pub fn sgn0(&self) -> Sgn0 {
-        if self.value > *MODULUS_MINUS_1_DIV_2 {
+        if self.value > *CURVE_ORDER_MINUS_1_DIV_2 {
             Sgn0::Negative
         } else {
             Sgn0::NonNegative
@@ -618,7 +618,7 @@ impl From<BigNum> for FieldElement {
 impl From<&[u8; FIELD_ELEMENT_SIZE]> for FieldElement {
     fn from(x: &[u8; FIELD_ELEMENT_SIZE]) -> Self {
         let mut n = BigNum::frombytes(x);
-        n.rmod(&MODULUS);
+        n.rmod(&CURVE_ORDER);
         Self { value: n }
     }
 }
@@ -915,7 +915,7 @@ impl FieldElementVector {
     }
 
     /// Computes inner product of 2 vectors of field elements
-    /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % MODULUS
+    /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % curve_order
     pub fn inner_product(&self, b: &FieldElementVector) -> Result<FieldElement, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let r = (0..b.len()).into_par_iter().map(|i| (&self[i] * &b[i])).reduce(|| FieldElement::new(), |a, b| a + b);
@@ -1524,11 +1524,11 @@ mod test {
         let mut start = Instant::now();
         for i in 0..count {
             let mut a = l[i].clone();
-            a.rmod(&MODULUS);
+            a.rmod(&CURVE_ORDER);
             let mut b = r[i].clone();
-            b.rmod(&MODULUS);
+            b.rmod(&CURVE_ORDER);
             let d = BigNum::mul(&a, &b);
-            o1.push(barrett_reduction(&d, &MODULUS, k, &u, &v));
+            o1.push(barrett_reduction(&d, &CURVE_ORDER, k, &u, &v));
         }
         println!("Mul1 for {} elems = {:?}", count, start.elapsed());
 
@@ -1537,7 +1537,7 @@ mod test {
             let a = l[i].clone();
             let b = r[i].clone();
             let d = BigNum::mul(&a, &b);
-            o2.push(barrett_reduction(&d, &MODULUS, k, &u, &v));
+            o2.push(barrett_reduction(&d, &CURVE_ORDER, k, &u, &v));
         }
         println!("Mul2 for {} elems = {:?}", count, start.elapsed());
 
@@ -1548,11 +1548,11 @@ mod test {
         let mut x = BigNum::new_int(1isize);
         start = Instant::now();
         for i in 0..count {
-            x.rmod(&MODULUS);
+            x.rmod(&CURVE_ORDER);
             let mut b = o1[i].clone();
-            b.rmod(&MODULUS);
+            b.rmod(&CURVE_ORDER);
             let d = BigNum::mul(&x, &b);
-            x = barrett_reduction(&d, &MODULUS, k, &u, &v);
+            x = barrett_reduction(&d, &CURVE_ORDER, k, &u, &v);
         }
         println!("Mul1 all for {} elems = {:?}", count, start.elapsed());
 
@@ -1561,7 +1561,7 @@ mod test {
         for i in 0..count {
             let b = o2[i].clone();
             let d = BigNum::mul(&y, &b);
-            y = barrett_reduction(&d, &MODULUS, k, &u, &v);
+            y = barrett_reduction(&d, &CURVE_ORDER, k, &u, &v);
         }
         println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
 
@@ -1593,13 +1593,13 @@ mod test {
 
         let start = Instant::now();
         for i in 0..count {
-            BigNum::modmul(&nums[i], &nums[i], &MODULUS);
+            BigNum::modmul(&nums[i], &nums[i], &CURVE_ORDER);
         }
         println!("Mul time for {} big nums = {:?}", count, start.elapsed());
 
         let start = Instant::now();
         for i in 0..count {
-            BigNum::modsqr(&nums[i], &MODULUS);
+            BigNum::modsqr(&nums[i], &CURVE_ORDER);
         }
         println!("Sqr time for {} big nums = {:?}", count, start.elapsed());
     }

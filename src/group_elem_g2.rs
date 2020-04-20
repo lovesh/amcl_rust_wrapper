@@ -1,4 +1,4 @@
-use crate::constants::{MODULUS, GROUP_G2_SIZE};
+use crate::constants::{CURVE_ORDER, GROUP_G2_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
@@ -153,7 +153,7 @@ impl GroupElement for G2 {
     }
 
     fn has_correct_order(&self) -> bool {
-        return self.value.mul(&MODULUS).is_infinity();
+        return self.value.mul(&CURVE_ORDER).is_infinity();
     }
 }
 
