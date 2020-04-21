@@ -7,7 +7,6 @@ pub const MODBYTES: usize = curve_MODBYTES;
 pub const NLEN: usize = curve_NLEN;
 pub const BIG_NUM_BITS: usize = BASEBITS;
 
-// Byte size of element in group G1, 1 extra byte for compression flag
 pub const FIELD_ORDER_ELEMENT_SIZE: usize = MODBYTES;
 #[cfg(feature = "bls381")]
 pub const CURVE_ORDER_ELEMENT_SIZE: usize = 32;
