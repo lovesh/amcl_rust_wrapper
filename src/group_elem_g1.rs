@@ -177,7 +177,7 @@ impl G1 {
     }
 
     pub fn to_bytes(&self) -> [u8; 2 * FIELD_ORDER_ELEMENT_SIZE] {
-        let mut bytes = [0u8; FIELD_ORDER_ELEMENT_SIZE + 1];
+        let mut bytes = [0u8; 2 * FIELD_ORDER_ELEMENT_SIZE + 1];
         let mut temp = GroupG1::new();
         temp.copy(&self.value);
         temp.tobytes(bytes.as_mut(), false);
