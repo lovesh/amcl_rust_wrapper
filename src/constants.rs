@@ -12,11 +12,11 @@ pub const FIELD_ORDER_ELEMENT_SIZE: usize = MODBYTES;
 #[cfg(feature = "bls381")]
 pub const CURVE_ORDER_ELEMENT_SIZE: usize = 32;
 #[cfg(feature = "bn254")]
-pub const CURVE_ORDER_ELEMENT_SIZE: usize = 28;
+pub const CURVE_ORDER_ELEMENT_SIZE: usize = 32;
 #[cfg(feature = "secp256k1")]
-pub const CURVE_ORDER_ELEMENT_SIZE: usize = 28;
+pub const CURVE_ORDER_ELEMENT_SIZE: usize = 32;
 #[cfg(feature = "ed25519")]
-pub const CURVE_ORDER_ELEMENT_SIZE: usize = 28;
+pub const CURVE_ORDER_ELEMENT_SIZE: usize = 32;
 
 // Byte size of element in group G1, 1 extra byte for compression flag
 pub const GROUP_G1_SIZE: usize = (2 * MODBYTES + 1) as usize;

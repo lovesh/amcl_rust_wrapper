@@ -609,12 +609,14 @@ impl From<&[u8; FIELD_ORDER_ELEMENT_SIZE]> for CurveOrderElement {
     }
 }
 
+#[cfg(feature = "bls381")]
 impl From<[u8; CURVE_ORDER_ELEMENT_SIZE]> for CurveOrderElement {
     fn from(x: [u8; CURVE_ORDER_ELEMENT_SIZE]) -> Self {
         Self::from(&x)
     }
 }
 
+#[cfg(feature = "bls381")]
 impl From<&[u8; CURVE_ORDER_ELEMENT_SIZE]> for CurveOrderElement {
     fn from(x: &[u8; CURVE_ORDER_ELEMENT_SIZE]) -> Self {
         let leading_bytes = FIELD_ORDER_ELEMENT_SIZE - CURVE_ORDER_ELEMENT_SIZE;

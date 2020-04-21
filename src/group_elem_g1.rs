@@ -52,6 +52,7 @@ impl GroupElement for G1 {
         GroupG1::mapit(&hash_msg(msg)).into()
     }
 
+    #[cfg(feature = "bls381")]
     fn hash_to_curve(msg: &[u8], dst: &hash2curve::DomainSeparationTag) -> Self {
         let hasher = hash2curve::bls381g1::Bls12381G1Sswu::new(dst.clone());
         match hasher.hash_to_curve_xmd::<sha2::Sha256>(msg) {
@@ -60,6 +61,11 @@ impl GroupElement for G1 {
             },
             Err(_) => Self::identity()
         }
+    }
+
+    #[cfg(not(feature = "bls381"))]
+    fn hash_to_curve(msg: &[u8], dst: &hash2curve::DomainSeparationTag) -> Self {
+        unimplemented!();
     }
 
     fn to_vec(&self) -> Vec<u8> {
