@@ -1,10 +1,10 @@
 use crate::errors::ValueError;
-use crate::field_elem::{FieldElement, FieldElementVector};
+use crate::curve_order_elem::{CurveOrderElement, CurveOrderElementVector};
 use crate::group_elem::GroupElementVector;
 use crate::group_elem_g1::{G1Vector, G1};
 
 /// Commit to field element `elem` with randomness `r` given groups elements `g` and `h`, i.e. compute g^elem.h^r
-pub fn commit_to_field_element(g: &G1, h: &G1, elem: &FieldElement, r: &FieldElement) -> G1 {
+pub fn commit_to_field_element(g: &G1, h: &G1, elem: &CurveOrderElement, r: &CurveOrderElement) -> G1 {
     g.binary_scalar_mul(h, elem, r)
 }
 
@@ -15,9 +15,9 @@ pub fn commit_to_field_element_vectors(
     g: &G1Vector,
     h: &G1Vector,
     u: &G1,
-    a: &FieldElementVector,
-    b: &FieldElementVector,
-    c: &FieldElement,
+    a: &CurveOrderElementVector,
+    b: &CurveOrderElementVector,
+    c: &CurveOrderElement,
 ) -> Result<G1, ValueError> {
     /*let a_g = g.inner_product_const_time(a)?;
     let b_h = h.inner_product_const_time(b)?;
@@ -28,7 +28,7 @@ pub fn commit_to_field_element_vectors(
     combined_g.extend_from_slice(h.as_slice());
     combined_g.push(u.clone());
 
-    let mut combined_f: Vec<FieldElement> = vec![];
+    let mut combined_f: Vec<CurveOrderElement> = vec![];
     combined_f.extend_from_slice(a.as_slice());
     combined_f.extend_from_slice(b.as_slice());
     combined_f.push(c.clone());

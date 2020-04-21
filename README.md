@@ -139,7 +139,7 @@ let b = G1::from_msg_hash(msg.as_bytes());
 4. Create vectors of field elements and do some operations
 ```rust
 // creates a vector of size 10 with all elements as 0
-let mut a = FieldElementVector::new(10);
+let mut a = CurveOrderElementVector::new(10);
 // Add 2 more elements to the above vector
 a.push(FieldElement::random());
 a.push(FieldElement::random());
@@ -154,7 +154,7 @@ a.sum();    // sum of elements of vector
 ```rust
 // Return a Vandermonde vector of a given field element, i.e. given element `k` and size `n`, return vector as `vec![1, k, k^2, k^3, ... k^n-1]`
 let k = FieldElement::random();  
-let van_vec = FieldElementVector::new_vandermonde_vector(&k, 5);
+let van_vec = CurveOrderElementVector::new_vandermonde_vector(&k, 5);
 ```
 
 ```rust
@@ -162,7 +162,7 @@ let van_vec = FieldElementVector::new_vandermonde_vector(&k, 5);
 let rands: Vec<_> = (0..10).map(|_| FieldElement::random()).collect();
 
 // an alternative way of creating vector of size 10 of random field elements
-let rands_1 = FieldElementVector::random(10);
+let rands_1 = CurveOrderElementVector::random(10);
 ```
 
 ```rust
@@ -209,7 +209,7 @@ let diff_vec = rands.minus(&rands_1);
 // eg. given a vector of group elements and field elements, G and F respectively, compute G[0]*F[0] + G[1]*F[1] + G[2]*F[2] + .. G[n-1]*F[n-1]   
 // requires vectors to be of same length
 let g = G1Vector::random(10);
-let f = FieldElementVector::random(10);
+let f = CurveOrderElementVector::random(10);
 
 // Uses constant time multi-scalar multiplication `multi_scalar_mul_const_time` underneath. 
 let ip = g.inner_product_const_time(&f);
@@ -267,7 +267,7 @@ assert!(poly.is_zero());
 
 // Create a polynomial from field elements as coefficients, the following polynomial will be c_0 + c_1*x + c_2*x^2 + c_3*x^3 + ... + c_d*x^d
 let coeffs: Vec<FieldElement> = vec![c_0, c_1, ... coefficients for smaller to higher degrees ..., c_d];
-let poly1 = UnivarPolynomial(FieldElementVector::from(coeffs));
+let poly1 = UnivarPolynomial(CurveOrderElementVector::from(coeffs));
 
 // Create a polynomial of degree `d` with random coefficients 
 let poly2 = UnivarPolynomial::random(d);

@@ -3,19 +3,19 @@ use crate::types::GroupGT;
 use super::ECCurve::fp12::{DENSE, FP12};
 use super::ECCurve::fp4::FP4;
 use super::ECCurve::pair::{another, ate, ate2, fexp, initmp, miller};
-use crate::constants::GroupGT_SIZE;
+use crate::constants::GROUP_GT_SIZE;
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::FieldElement;
+use crate::curve_order_elem::CurveOrderElement;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
-use crate::group_elem_g2::{parse_hex_as_FP2, G2};
+use crate::group_elem_g2::{parse_hex_as_fp2, G2};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Mul;
 
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Error as SError, Serialize, Serializer};
-use std::str::{FromStr, SplitWhitespace};
+use serde::ser::{Serialize, Serializer};
+use std::str::SplitWhitespace;
 use zeroize::Zeroize;
 
 #[derive(Clone)]
@@ -96,7 +96,7 @@ impl GT {
         Self { value: m }
     }
 
-    pub fn pow(&self, e: &FieldElement) -> Self {
+    pub fn pow(&self, e: &CurveOrderElement) -> Self {
         Self {
             value: self.value.pow(&e.to_bignum()),
         }
@@ -129,19 +129,19 @@ impl GT {
         self.value.clone()
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_vec(&self) -> Vec<u8> {
         let mut temp = FP12::new();
         temp.copy(&self.value);
-        let mut bytes: [u8; GroupGT_SIZE] = [0; GroupGT_SIZE];
+        let mut bytes: [u8; GROUP_GT_SIZE] = [0; GROUP_GT_SIZE];
         temp.tobytes(&mut bytes);
         bytes.to_vec()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != GroupGT_SIZE {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+        if bytes.len() != GROUP_GT_SIZE {
             return Err(SerzDeserzError::GTBytesIncorrectSize(
                 bytes.len(),
-                GroupGT_SIZE,
+                GROUP_GT_SIZE,
             ));
         }
         Ok(Self {
@@ -152,10 +152,10 @@ impl GT {
     /// Writes bytes to given slice. Raises exception when given slice is not of
     /// desired length.
     pub fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
-        if target.len() != GroupGT_SIZE {
+        if target.len() != GROUP_GT_SIZE {
             return Err(SerzDeserzError::GTBytesIncorrectSize(
                 target.len(),
-                GroupGT_SIZE,
+                GROUP_GT_SIZE,
             ));
         }
         let mut temp = FP12::new();
@@ -178,9 +178,9 @@ impl GT {
 
     pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
         let mut iter = s.split_whitespace();
-        let a = parse_hex_as_FP4(&mut iter)?;
-        let b = parse_hex_as_FP4(&mut iter)?;
-        let c = parse_hex_as_FP4(&mut iter)?;
+        let a = parse_hex_as_fp4(&mut iter)?;
+        let b = parse_hex_as_fp4(&mut iter)?;
+        let c = parse_hex_as_fp4(&mut iter)?;
         let mut value = FP12::new();
         value.seta(a);
         value.setb(b);
@@ -199,13 +199,13 @@ impl GT {
 }
 
 /// Parse given hex string as FP4
-pub fn parse_hex_as_FP4(iter: &mut SplitWhitespace) -> Result<FP4, SerzDeserzError> {
+pub fn parse_hex_as_fp4(iter: &mut SplitWhitespace) -> Result<FP4, SerzDeserzError> {
     // Logic almost copied from AMCL but with error handling and constant time execution.
     // Constant time is important as hex is used during serialization and deserialization.
     // A seemingly effortless solution is to filter string for errors and pad with 0s before
     // passing to AMCL but that would be expensive as the string is scanned twice
-    let a = parse_hex_as_FP2(iter)?;
-    let b = parse_hex_as_FP2(iter)?;
+    let a = parse_hex_as_fp2(iter)?;
+    let b = parse_hex_as_fp2(iter)?;
     let mut fp4 = FP4::new();
     fp4.seta(a);
     fp4.setb(b);
@@ -218,7 +218,7 @@ impl PartialEq for GT {
     }
 }
 
-impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
+impl_group_elem_conversions!(GT, GroupGT, GROUP_GT_SIZE);
 
 impl_group_elem_traits!(GT, GroupGT);
 
@@ -257,8 +257,7 @@ impl Mul<&GT> for &GT {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::group_elem_g1::G1Vector;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_unity() {
@@ -268,7 +267,7 @@ mod test {
 
     #[test]
     fn test_inverse() {
-        let minus_one = FieldElement::minus_one();
+        let minus_one = CurveOrderElement::minus_one();
         for _ in 0..10 {
             let g1 = G1::random();
             let g2 = G2::random();
@@ -294,7 +293,7 @@ mod test {
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1_identity, &g2),
         );
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         // e(g1, g2 + identity) == e(g1, g2)*e(g1, identity)
         let lhs = GT::ate_pairing(&g1, &(&g2 + &g2_identity));
@@ -302,7 +301,7 @@ mod test {
             &GT::ate_pairing(&g1, &g2),
             &GT::ate_pairing(&g1, &g2_identity),
         );
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         let h1 = G1::random();
         let h2 = G2::random();
@@ -313,7 +312,7 @@ mod test {
             &GT::ate_pairing(&g1_identity, &h2),
         );
         let rhs = GT::ate_pairing(&g1, &g2);
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         // e(identity, g2)*e(h1, h2) == e(h1, h2)
         let lhs = GT::product(
@@ -321,15 +320,15 @@ mod test {
             &GT::ate_pairing(&h1, &h2),
         );
         let rhs = GT::ate_pairing(&h1, &h2);
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         assert!(GT::ate_pairing(&g1_identity, &g2_identity).is_one());
 
         // 2-pairing
-        assert!(GT::ate_2_pairing(&g1, &g2, &g1_identity, &h2) == GT::ate_pairing(&g1, &g2));
-        assert!(GT::ate_2_pairing(&g1, &g2, &h1, &g2_identity) == GT::ate_pairing(&g1, &g2));
-        assert!(GT::ate_2_pairing(&g1_identity, &g2, &h1, &h2) == GT::ate_pairing(&h1, &h2));
-        assert!(GT::ate_2_pairing(&g1, &g2_identity, &h1, &h2) == GT::ate_pairing(&h1, &h2));
+        assert_eq!(GT::ate_2_pairing(&g1, &g2, &g1_identity, &h2), GT::ate_pairing(&g1, &g2));
+        assert_eq!(GT::ate_2_pairing(&g1, &g2, &h1, &g2_identity), GT::ate_pairing(&g1, &g2));
+        assert_eq!(GT::ate_2_pairing(&g1_identity, &g2, &h1, &h2), GT::ate_pairing(&h1, &h2));
+        assert_eq!(GT::ate_2_pairing(&g1, &g2_identity, &h1, &h2), GT::ate_pairing(&h1, &h2));
         assert!(GT::ate_2_pairing(&g1_identity, &g2_identity, &g1_identity, &g2_identity).is_one());
 
         let k1 = G1::random();
@@ -374,20 +373,20 @@ mod test {
         // e(g1, -g2) == e(-g1, g2)
         let lhs = GT::ate_pairing(&g1, &g2_neg);
         let rhs = GT::ate_pairing(&g1_neg, &g2);
-        assert!(lhs == rhs);
+        assert_eq!(lhs, rhs);
 
         // e(g1, -g2) == e(-g1, g2) == e(g1, g2)^-1
         let e = GT::ate_pairing(&g1, &g2);
         let e_inv = e.inverse();
-        assert!(lhs == e_inv);
+        assert_eq!(lhs, e_inv);
 
         let p = GT::ate_pairing(&g1, &g2);
 
         // e(g1, g2) = e(-g1, g2)^-1 => e(g1, g2) * e(-g1, g2) == 1
-        assert!(GT::product(&p, &lhs) == GT::one());
+        assert_eq!(GT::product(&p, &lhs), GT::one());
 
         // e(g1, g2) = e(g1, -g2)^-1 => e(g1, g2) * e(g1, -g2) == 1
-        assert!(GT::product(&p, &rhs) == GT::one());
+        assert_eq!(GT::product(&p, &rhs), GT::one());
     }
 
     #[test]
@@ -440,7 +439,7 @@ mod test {
         assert_eq!(rhs_2, rhs);
         assert_eq!(rhs_3, rhs);
 
-        let r = FieldElement::random();
+        let r = CurveOrderElement::random();
         // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
         let p1 = GT::ate_pairing(&g1, &(&g2 * &r));
         let p2 = GT::ate_pairing(&(&g1 * &r), &g2);
@@ -478,10 +477,10 @@ mod test {
             count,
             start.elapsed()
         );
-        assert!(accum == multi);
+        assert_eq!(accum, multi);
 
         let ip = GT::inner_product(&g1_vec, &g2_vec).unwrap();
-        assert!(accum == ip);
+        assert_eq!(accum, ip);
     }
 
     #[test]
@@ -491,8 +490,8 @@ mod test {
         let g1_vec = (0..count).map(|_| G1::random()).collect::<Vec<G1>>();
         let g2_vec = (0..count).map(|_| G2::random()).collect::<Vec<G2>>();
         let r_vec = (0..count)
-            .map(|_| FieldElement::random())
-            .collect::<Vec<FieldElement>>();
+            .map(|_| CurveOrderElement::random())
+            .collect::<Vec<CurveOrderElement>>();
 
         //e(g1, g2)^r
         let mut pairing_exp = vec![];
