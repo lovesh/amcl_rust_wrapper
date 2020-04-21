@@ -1,8 +1,7 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::FieldElement;
-
+use crate::curve_order_elem::CurveOrderElement;
 use std::slice::Iter;
 
 #[macro_export]
@@ -29,13 +28,13 @@ pub trait GroupElement: Clone + Sized {
 
     /// Return a random group element
     fn random() -> Self {
-        let n = FieldElement::random();
+        let n = CurveOrderElement::random();
         Self::generator().scalar_mul_const_time(&n)
     }
 
     /// Return a random group element using the given random number generator
     fn random_using_rng<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let n = FieldElement::random_using_rng(rng);
+        let n = CurveOrderElement::random_using_rng(rng);
         Self::generator().scalar_mul_const_time(&n)
     }
 
@@ -53,10 +52,10 @@ pub trait GroupElement: Clone + Sized {
     fn hash_to_curve(msg: &[u8], dst: &hash2curve::DomainSeparationTag) -> Self;
 
     /// Return byte representation as vector
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_vec(&self) -> Vec<u8>;
 
     /// Create an element from a byte representation
-    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError>;
+    fn from_slice(bytes: &[u8]) -> Result<Self, SerzDeserzError>;
 
     /// Writes bytes to given slice. Raises exception when given slice is not of desired length.
     fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError>;
@@ -78,7 +77,7 @@ pub trait GroupElement: Clone + Sized {
 
     /// Multiply point on the curve (element of group G1) with a scalar. Constant time operation.
     /// self * field_element_a.
-    fn scalar_mul_const_time(&self, a: &FieldElement) -> Self;
+    fn scalar_mul_const_time(&self, a: &CurveOrderElement) -> Self;
 
     /// Return the double of the group element
     fn double(&self) -> Self;
@@ -129,11 +128,17 @@ macro_rules! impl_group_elem_conversions {
             }
         }
 
+        impl From<[u8; $group_size]> for $group_element {
+            fn from(x: [u8; $group_size]) -> Self {
+                Self::from(&x)
+            }
+        }
+
         impl Hash for $group_element {
             fn hash<H: Hasher>(&self, state: &mut H) {
                 let mut bytes: [u8; $group_size] = [0; $group_size];
                 self.write_to_slice_unchecked(&mut bytes);
-                state.write(&self.to_bytes())
+                state.write(&self.to_vec())
             }
         }
     };
@@ -307,34 +312,34 @@ macro_rules! impl_group_elem_ops {
             }
         }
 
-        impl Mul<FieldElement> for $group_element {
+        impl Mul<CurveOrderElement> for $group_element {
             type Output = Self;
 
-            fn mul(self, other: FieldElement) -> Self {
+            fn mul(self, other: CurveOrderElement) -> Self {
                 self.scalar_mul_const_time(&other)
             }
         }
 
-        impl Mul<&FieldElement> for $group_element {
+        impl Mul<&CurveOrderElement> for $group_element {
             type Output = Self;
 
-            fn mul(self, other: &FieldElement) -> Self {
+            fn mul(self, other: &CurveOrderElement) -> Self {
                 self.scalar_mul_const_time(other)
             }
         }
 
-        impl Mul<FieldElement> for &$group_element {
+        impl Mul<CurveOrderElement> for &$group_element {
             type Output = $group_element;
 
-            fn mul(self, other: FieldElement) -> $group_element {
+            fn mul(self, other: CurveOrderElement) -> $group_element {
                 self.scalar_mul_const_time(&other)
             }
         }
 
-        impl Mul<&FieldElement> for &$group_element {
+        impl Mul<&CurveOrderElement> for &$group_element {
             type Output = $group_element;
 
-            fn mul(self, other: &FieldElement) -> $group_element {
+            fn mul(self, other: &CurveOrderElement) -> $group_element {
                 self.scalar_mul_const_time(other)
             }
         }
@@ -363,7 +368,7 @@ macro_rules! impl_group_elem_ops {
 
 macro_rules! impl_scalar_mul_ops {
     ( $group_element:ident ) => {
-        impl Mul<$group_element> for FieldElement {
+        impl Mul<$group_element> for CurveOrderElement {
             type Output = $group_element;
 
             fn mul(self, other: $group_element) -> $group_element {
@@ -371,7 +376,7 @@ macro_rules! impl_scalar_mul_ops {
             }
         }
 
-        impl Mul<&$group_element> for FieldElement {
+        impl Mul<&$group_element> for CurveOrderElement {
             type Output = $group_element;
 
             fn mul(self, other: &$group_element) -> $group_element {
@@ -379,7 +384,7 @@ macro_rules! impl_scalar_mul_ops {
             }
         }
 
-        impl Mul<$group_element> for &FieldElement {
+        impl Mul<$group_element> for &CurveOrderElement {
             type Output = $group_element;
 
             fn mul(self, other: $group_element) -> $group_element {
@@ -387,7 +392,7 @@ macro_rules! impl_scalar_mul_ops {
             }
         }
 
-        impl Mul<&$group_element> for &FieldElement {
+        impl Mul<&$group_element> for &CurveOrderElement {
             type Output = $group_element;
 
             fn mul(self, other: &$group_element) -> $group_element {
@@ -445,7 +450,7 @@ macro_rules! impl_optmz_scalar_mul_ops {
 
             /// Multiply point on the curve (element of group G1) with a scalar. Variable time operation
             /// Uses wNAF.
-            pub fn scalar_mul_variable_time(&self, a: &FieldElement) -> Self {
+            pub fn scalar_mul_variable_time(&self, a: &CurveOrderElement) -> Self {
                 // TODO: Optimization: Attach the lookup table to the struct
                 let table = $lookup_table::from(self);
                 let wnaf = a.to_wnaf(5);
@@ -514,11 +519,11 @@ pub trait GroupElementVector<T>: Sized {
 
     /// Multiply each element of the vector with a given field
     /// element `n` (scale the vector). Modifies the vector.
-    fn scale(&mut self, n: &FieldElement);
+    fn scale(&mut self, n: &CurveOrderElement);
 
     /// Multiply each element of the vector with a given field
     /// element `n` to create a new vector
-    fn scaled_by(&self, n: &FieldElement) -> Self;
+    fn scaled_by(&self, n: &CurveOrderElement) -> Self;
 
     /// Add 2 vectors
     fn plus(&self, b: &Self) -> Result<Self, ValueError>;
@@ -589,7 +594,7 @@ macro_rules! impl_group_elem_vec_ops {
                     .reduce(|| $group_element::new(), |a, b| a + b)
             }
 
-            fn scale(&mut self, n: &FieldElement) {
+            fn scale(&mut self, n: &CurveOrderElement) {
                 // TODO: Since each element is multiplied with same field element, use the
                 // optimized version.
                 for i in 0..self.len() {
@@ -597,7 +602,7 @@ macro_rules! impl_group_elem_vec_ops {
                 }
             }
 
-            fn scaled_by(&self, n: &FieldElement) -> Self {
+            fn scaled_by(&self, n: &CurveOrderElement) -> Self {
                 // TODO: Since each element is multiplied with same field element, use the
                 // optimized version.
                 let mut scaled = Self::with_capacity(self.len());
@@ -651,14 +656,14 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
             pub fn inner_product_const_time<'g, 'f>(
                 &'g self,
-                b: impl IntoIterator<Item = &'f FieldElement>,
+                b: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 self.multi_scalar_mul_const_time(b)
             }
 
             pub fn inner_product_var_time<'g, 'f>(
                 &'g self,
-                b: impl IntoIterator<Item = &'f FieldElement>,
+                b: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 self.multi_scalar_mul_var_time(b)
             }
@@ -666,7 +671,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             #[deprecated(since = "0.3.0", note = "Please use the `inner_product_var_time` function instead")]
             pub fn inner_product_var_time_with_ref_vecs(
                 group_elems: Vec<&$group_element>,
-                field_elems: Vec<&FieldElement>,
+                field_elems: Vec<&CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 Self::multi_scalar_mul_var_time_without_precomputation(group_elems, field_elems)
             }
@@ -692,7 +697,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// multiplications and n-1 additions for `n` field elements
             pub fn multi_scalar_mul_const_time_naive(
                 &self,
-                field_elems: &FieldElementVector,
+                field_elems: &CurveOrderElementVector,
             ) -> Result<$group_element, ValueError> {
                 check_vector_size_for_equality!(field_elems, self)?;
                 let mut accum = $group_element::new();
@@ -705,7 +710,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Constant time multi-scalar multiplication
             pub fn multi_scalar_mul_const_time<'g, 'f>(
                 &'g self,
-                field_elems: impl IntoIterator<Item = &'f FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 Self::multi_scalar_mul_const_time_without_precomputation(self.as_slice(), field_elems)
             }
@@ -713,7 +718,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Variable time multi-scalar multiplication
             pub fn multi_scalar_mul_var_time<'g, 'f>(
                 &'g self,
-                field_elems: impl IntoIterator<Item = &'f FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 Self::multi_scalar_mul_var_time_without_precomputation(self.as_slice(), field_elems)
             }
@@ -721,7 +726,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Strauss multi-scalar multiplication
             pub fn multi_scalar_mul_var_time_without_precomputation<'g, 'f>(
                 group_elems: impl IntoIterator<Item = &'g $group_element>,
-                field_elems: impl IntoIterator<Item = &'f FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 let lookup_tables: Vec<_> = group_elems
                     .into_iter()
@@ -737,7 +742,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             #[deprecated(since = "0.3.0", note = "Please use the `multi_scalar_mul_var_time_without_precomputation` function instead")]
             pub fn multi_scalar_mul_var_time_from_ref_vecs(
                 group_elems: Vec<&$group_element>,
-                field_elems: Vec<&FieldElement>,
+                field_elems: Vec<&CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 let lookup_tables: Vec<_> = group_elems
                     .iter()
@@ -753,7 +758,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
             pub fn multi_scalar_mul_var_time_with_precomputation_done<'f>(
                 lookup_tables: &[$lookup_table],
-                field_elems: impl IntoIterator<Item = &'f FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 let mut nafs: Vec<_> = field_elems.into_iter().map(|e| e.to_wnaf(5)).collect();
 
@@ -785,7 +790,7 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Still helps with reducing doublings
             pub fn multi_scalar_mul_const_time_without_precomputation<'g, 'f>(
                 group_elems: impl IntoIterator<Item = &'g $group_element>,
-                field_elems: impl IntoIterator<Item = &'f FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
 
                 // Choosing window of size 3.
@@ -802,7 +807,7 @@ macro_rules! impl_group_elem_vec_product_ops {
 
             pub fn multi_scalar_mul_const_time_with_precomputation_done<'f>(
                 group_elem_multiples: &[Vec<$group_element>],
-                field_elems: impl IntoIterator<Item = &'f FieldElement>,
+                field_elems: impl IntoIterator<Item = &'f CurveOrderElement>,
             ) -> Result<$group_element, ValueError> {
                 // TODO: The test shows that precomputing multiples does not help much. Experiment with bigger window.
 
@@ -837,7 +842,7 @@ macro_rules! impl_group_elem_vec_product_ops {
 
             /// Non-constant time operation. Scale this group element vector by a factor. Each group
             /// element is multiplied by the same factor so wnaf is computed only once.
-            pub fn scale_var_time(&mut self, n: &FieldElement) {
+            pub fn scale_var_time(&mut self, n: &CurveOrderElement) {
                 let wnaf = n.to_wnaf(5);
                 self.elems.as_mut_slice().par_iter_mut().for_each(|e| {
                     let table = $lookup_table::from(&(*e));
@@ -847,7 +852,7 @@ macro_rules! impl_group_elem_vec_product_ops {
 
             /// Non-constant time operation. Return a scaled vector. Each group
             /// element is multiplied by the same factor so wnaf is computed only once.
-            pub fn scaled_by_var_time(&self, n: &FieldElement) -> Self {
+            pub fn scaled_by_var_time(&self, n: &CurveOrderElement) -> Self {
                 let mut scaled: Self = self.clone();
                 scaled.scale_var_time(n);
                 scaled
@@ -931,8 +936,9 @@ macro_rules! impl_group_elem_vec_conversions {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde::{Serialize, Deserialize};
     use crate::constants::GROUP_G1_SIZE;
-    use crate::field_elem::FieldElementVector;
+    use crate::curve_order_elem::CurveOrderElementVector;
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::constants::{GROUP_G2_SIZE, GROUP_GT_SIZE};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
@@ -955,17 +961,17 @@ mod test {
                     let y = $group::from(&bytes);
                     assert_eq!(x, y);
 
-                    let bytes1 = x.to_bytes();
-                    assert_eq!(x, $group::from_bytes(bytes1.as_slice()).unwrap());
+                    let bytes1 = x.to_vec();
+                    assert_eq!(x, $group::from_slice(bytes1.as_slice()).unwrap());
 
                     // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
                     let mut bytes2 = bytes1.clone();
                     bytes2.push(0);
-                    assert!($group::from_bytes(&bytes2).is_err());
+                    assert!($group::from_slice(&bytes2).is_err());
                     assert!(x.write_to_slice(&mut bytes2).is_err());
 
                     // Decrease length of byte vector
-                    assert!($group::from_bytes(&bytes2[0..$group_size - 4]).is_err());
+                    assert!($group::from_slice(&bytes2[0..$group_size - 4]).is_err());
                     assert!(x.write_to_slice(&mut bytes2[0..$group_size - 4]).is_err());
                 }
             };
@@ -1035,7 +1041,7 @@ mod test {
             ( $group:ident ) => {
                 for _ in 0..10 {
                     let g = $group::random();
-                    let f = FieldElement::random();
+                    let f = CurveOrderElement::random();
                     let m = g.scalar_mul_const_time(&f);
                     // Operands can be in any order
                     assert_eq!(m, &g * &f);
@@ -1126,7 +1132,7 @@ mod test {
                 }
                 println!("Addition time for {} elems = {:?}", count, start.elapsed());
 
-                let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
+                let fs: Vec<_> = (0..100).map(|_| CurveOrderElement::random()).collect();
                 start = Instant::now();
                 for i in 0..count {
                     let _  = &points[i] * &fs[i];
@@ -1204,7 +1210,7 @@ mod test {
                 let a = $group::random();
                 let table = $lookup_table::from(&a);
                 for i in x.iter() {
-                    let f = FieldElement::from(*i as u8);
+                    let f = CurveOrderElement::from(*i as u8);
                     let expected = &a * f;
                     assert_eq!(expected, *table.select(*i as usize));
                 }
@@ -1221,7 +1227,7 @@ mod test {
             ( $group:ident, $lookup_table:ident ) => {
                 for _ in 0..100 {
                     let a = $group::random();
-                    let r = FieldElement::random();
+                    let r = CurveOrderElement::random();
                     let expected = &a * &r;
 
                     let table = $lookup_table::from(&a);
@@ -1247,12 +1253,12 @@ mod test {
                     let gen = $group::generator();
 
                     for i in 0..70 {
-                        fs.push(FieldElement::random());
+                        fs.push(CurveOrderElement::random());
                         gs.push(gen.scalar_mul_const_time(&fs[i]));
                     }
 
                     let gv = $vector::from(gs.as_slice());
-                    let fv = FieldElementVector::from(fs.as_slice());
+                    let fv = CurveOrderElementVector::from(fs.as_slice());
                     let res = gv.multi_scalar_mul_const_time_naive(&fv).unwrap();
 
                     let res_1 = gv.multi_scalar_mul_var_time(fv.as_ref()).unwrap();
@@ -1294,7 +1300,7 @@ mod test {
         let size = 30;
         macro_rules! scale {
             ( $group_vec:ident ) => {
-                let r = FieldElement::random();
+                let r = CurveOrderElement::random();
                 let vector = $group_vec::random(size);
                 let start = Instant::now();
                 let s1 = vector.scaled_by(&r);

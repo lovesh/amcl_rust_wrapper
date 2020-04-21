@@ -5,7 +5,7 @@ use super::ECCurve::fp4::FP4;
 use super::ECCurve::pair::{another, ate, ate2, fexp, initmp, miller};
 use crate::constants::GROUP_GT_SIZE;
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::FieldElement;
+use crate::curve_order_elem::CurveOrderElement;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
 use crate::group_elem_g2::{parse_hex_as_fp2, G2};
@@ -96,7 +96,7 @@ impl GT {
         Self { value: m }
     }
 
-    pub fn pow(&self, e: &FieldElement) -> Self {
+    pub fn pow(&self, e: &CurveOrderElement) -> Self {
         Self {
             value: self.value.pow(&e.to_bignum()),
         }
@@ -129,7 +129,7 @@ impl GT {
         self.value.clone()
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_vec(&self) -> Vec<u8> {
         let mut temp = FP12::new();
         temp.copy(&self.value);
         let mut bytes: [u8; GROUP_GT_SIZE] = [0; GROUP_GT_SIZE];
@@ -137,7 +137,7 @@ impl GT {
         bytes.to_vec()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != GROUP_GT_SIZE {
             return Err(SerzDeserzError::GTBytesIncorrectSize(
                 bytes.len(),
@@ -267,7 +267,7 @@ mod test {
 
     #[test]
     fn test_inverse() {
-        let minus_one = FieldElement::minus_one();
+        let minus_one = CurveOrderElement::minus_one();
         for _ in 0..10 {
             let g1 = G1::random();
             let g2 = G2::random();
@@ -439,7 +439,7 @@ mod test {
         assert_eq!(rhs_2, rhs);
         assert_eq!(rhs_3, rhs);
 
-        let r = FieldElement::random();
+        let r = CurveOrderElement::random();
         // e(g1, g2^r) == e(g1^r, g2) == e(g1, g2)^r
         let p1 = GT::ate_pairing(&g1, &(&g2 * &r));
         let p2 = GT::ate_pairing(&(&g1 * &r), &g2);
@@ -490,8 +490,8 @@ mod test {
         let g1_vec = (0..count).map(|_| G1::random()).collect::<Vec<G1>>();
         let g2_vec = (0..count).map(|_| G2::random()).collect::<Vec<G2>>();
         let r_vec = (0..count)
-            .map(|_| FieldElement::random())
-            .collect::<Vec<FieldElement>>();
+            .map(|_| CurveOrderElement::random())
+            .collect::<Vec<CurveOrderElement>>();
 
         //e(g1, g2)^r
         let mut pairing_exp = vec![];

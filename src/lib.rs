@@ -5,6 +5,8 @@ pub extern crate amcl;
 
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate arrayref;
 
 #[cfg(feature = "bn254")]
 pub use amcl::bn254 as ECCurve;
@@ -18,20 +20,8 @@ pub use amcl::secp256k1 as ECCurve;
 #[cfg(feature = "ed25519")]
 pub use amcl::ed25519 as ECCurve;
 
-extern crate serde;
-
-#[macro_use]
-extern crate serde_derive;
-
-extern crate serde_json;
-
-extern crate rayon;
-
-extern crate subtle_encoding;
-
 pub mod constants;
 pub mod types;
-pub mod signum;
 
 #[macro_use]
 pub mod errors;
@@ -42,7 +32,7 @@ pub mod macros;
 pub mod utils;
 
 #[macro_use]
-pub mod field_elem;
+pub mod curve_order_elem;
 #[macro_use]
 pub mod group_elem;
 #[macro_use]

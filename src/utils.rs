@@ -3,7 +3,7 @@ extern crate sha3;
 
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{CURVE_ORDER, FIELD_ELEMENT_SIZE};
+use crate::constants::{CURVE_ORDER, FIELD_ORDER_ELEMENT_SIZE};
 use crate::types::{BigNum, DoubleBigNum};
 use amcl::rand::RAND;
 
@@ -11,10 +11,10 @@ use sha3::digest::{ExtendableOutput, Input, XofReader};
 use sha3::Shake256;
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
-pub fn hash_msg(msg: &[u8]) -> [u8; FIELD_ELEMENT_SIZE] {
+pub fn hash_msg(msg: &[u8]) -> [u8; FIELD_ORDER_ELEMENT_SIZE] {
     let mut hasher = Shake256::default();
     hasher.input(&msg);
-    let mut h: [u8; FIELD_ELEMENT_SIZE] = [0; FIELD_ELEMENT_SIZE];
+    let mut h = [0u8; FIELD_ORDER_ELEMENT_SIZE];
     hasher.xof_result().read(&mut h);
     h
 }
@@ -160,7 +160,7 @@ pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
 mod test {
     use super::*;
     use crate::constants;
-    use crate::field_elem::FieldElement;
+    use crate::curve_order_elem::CurveOrderElement;
     use crate::group_elem::GroupElement;
     use crate::group_elem_g1::G1;
     use crate::utils::rand::Rng;
@@ -173,7 +173,7 @@ mod test {
     fn timing_fp_big() {
         // TODO: Compare adding raw BIGs and FieldElement to check the overhead of the abstraction
         let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
+        let elems: Vec<_> = (0..count).map(|_| CurveOrderElement::random()).collect();
         let bigs: Vec<_> = elems.iter().map(|f| f.to_bignum()).collect();
         let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
         let mut res_mul = BIG::new_int(1 as isize);
@@ -198,7 +198,7 @@ mod test {
             start.elapsed()
         );
 
-        let res_mul = FieldElement::one();
+        let res_mul = CurveOrderElement::one();
         start = Instant::now();
         for e in &elems {
             res_mul.multiply(&e);
@@ -267,8 +267,8 @@ mod test {
         let mut r2 = vec![];
 
         for _ in 0..count {
-            a.push(FieldElement::random().to_bignum());
-            b.push(FieldElement::random().to_bignum());
+            a.push(CurveOrderElement::random().to_bignum());
+            b.push(CurveOrderElement::random().to_bignum());
             let mut x: G1 = GroupElement::random();
             g.push(x.to_ecp());
             x = GroupElement::random();
@@ -342,7 +342,7 @@ mod test {
             *constants::BARRETT_REDC_V,
         );
         let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random()).collect();
+        let elems: Vec<_> = (0..count).map(|_| CurveOrderElement::random()).collect();
         let bigs: Vec<_> = elems.iter().map(|f| f.to_bignum()).collect();
 
         let mut sum = bigs[0].clone();

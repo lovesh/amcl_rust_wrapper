@@ -1,8 +1,8 @@
-use crate::constants::{CURVE_ORDER, GROUP_G1_SIZE};
+use crate::constants::{CURVE_ORDER, GROUP_G1_SIZE, FIELD_ORDER_ELEMENT_SIZE};
 use crate::errors::{SerzDeserzError, ValueError};
-use crate::field_elem::{FieldElement, FieldElementVector};
+use crate::curve_order_elem::{CurveOrderElement, CurveOrderElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
-use crate::types::{GroupG1, FP};
+use crate::types::{GroupG1, FP, BigNum};
 use crate::utils::hash_msg;
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 
@@ -10,10 +10,9 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
-use crate::rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
-use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
-use serde::ser::{Serialize, Serializer};
+use serde::de::{Error as DError, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};
 use zeroize::Zeroize;
 use hash2curve::HashToCurveXmd;
@@ -55,19 +54,21 @@ impl GroupElement for G1 {
 
     fn hash_to_curve(msg: &[u8], dst: &hash2curve::DomainSeparationTag) -> Self {
         let hasher = hash2curve::bls381g1::Bls12381G1Sswu::new(dst.clone());
-        match hasher.hash_to_curve_xmd::<sha3::Sha3_256, &[u8]>(msg) {
-            Ok(p) => p.into(),
+        match hasher.hash_to_curve_xmd::<sha2::Sha256>(msg) {
+            Ok(p) => {
+                p.0.into()
+            },
             Err(_) => Self::identity()
         }
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_vec(&self) -> Vec<u8> {
         let mut bytes: [u8; GROUP_G1_SIZE] = [0; GROUP_G1_SIZE];
         self.write_to_slice_unchecked(&mut bytes);
         bytes.to_vec()
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+    fn from_slice(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
         if bytes.len() != GROUP_G1_SIZE {
             return Err(SerzDeserzError::G1BytesIncorrectSize(
                 bytes.len(),
@@ -114,7 +115,7 @@ impl GroupElement for G1 {
         diff.into()
     }
 
-    fn scalar_mul_const_time(&self, a: &FieldElement) -> Self {
+    fn scalar_mul_const_time(&self, a: &CurveOrderElement) -> Self {
         self.value.mul(&a.to_bignum()).into()
     }
 
@@ -163,10 +164,56 @@ impl G1 {
     /// Computes sum of 2 scalar multiplications.
     /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
     /// returns self*a + h*b
-    pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
+    pub fn binary_scalar_mul(&self, h: &Self, a: &CurveOrderElement, b: &CurveOrderElement) -> Self {
         self.value
             .mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum())
             .into()
+    }
+
+    pub fn to_bytes(&self) -> [u8; 2 * FIELD_ORDER_ELEMENT_SIZE] {
+        let mut bytes = [0u8; FIELD_ORDER_ELEMENT_SIZE + 1];
+        let mut temp = GroupG1::new();
+        temp.copy(&self.value);
+        temp.tobytes(bytes.as_mut(), false);
+        *array_ref![bytes, 1, 2 * FIELD_ORDER_ELEMENT_SIZE]
+    }
+
+    pub fn to_compressed_bytes(&self) -> [u8; FIELD_ORDER_ELEMENT_SIZE] {
+        let mut bytes = [0u8; FIELD_ORDER_ELEMENT_SIZE + 1];
+        let mut temp = GroupG1::new();
+        temp.copy(&self.value);
+        temp.tobytes(bytes.as_mut(), true);
+        bytes[1] |= (bytes[0] & 1) << 7;
+        *array_ref![bytes, 1, FIELD_ORDER_ELEMENT_SIZE]
+    }
+}
+
+impl From<[u8; 2 * FIELD_ORDER_ELEMENT_SIZE]> for G1 {
+    fn from(data: [u8; 2 * FIELD_ORDER_ELEMENT_SIZE]) -> Self {
+        Self::from(&data)
+    }
+}
+
+impl From<&[u8; 2 * FIELD_ORDER_ELEMENT_SIZE]> for G1 {
+    fn from(data: &[u8; 2 * FIELD_ORDER_ELEMENT_SIZE]) -> Self {
+        let x = BigNum::frombytes(&data[..FIELD_ORDER_ELEMENT_SIZE]);
+        let y = BigNum::frombytes(&data[FIELD_ORDER_ELEMENT_SIZE..]);
+        Self { value: GroupG1::new_bigs(&x, &y) }
+    }
+}
+
+impl From<[u8; FIELD_ORDER_ELEMENT_SIZE]> for G1 {
+    fn from(data: [u8; FIELD_ORDER_ELEMENT_SIZE]) -> Self {
+        Self::from(&data)
+    }
+}
+
+impl From<&[u8; FIELD_ORDER_ELEMENT_SIZE]> for G1 {
+    fn from(data: &[u8; FIELD_ORDER_ELEMENT_SIZE]) -> Self {
+        let parity = ((data[0] >> 7) & 1u8) as isize;
+        let mut temp = data.clone();
+        temp[0] &= 0x7F;
+        Self { value: GroupG1::new_bigint(&BigNum::frombytes(&temp[..]), parity) }
     }
 }
 
@@ -212,7 +259,7 @@ pub fn parse_hex_as_fp(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError
     };
 
     let x = match iter.next() {
-        Some(i) => FieldElement::parse_hex_as_bignum(i.to_string())?,
+        Some(i) => CurveOrderElement::parse_hex_as_bignum(i.to_string())?,
         None => return Err(SerzDeserzError::CannotParseFP),
     };
 
@@ -226,9 +273,21 @@ mod test {
     use hash2curve::DomainSeparationTag;
 
     #[test]
-    fn test_hash_to_curve() {
+    fn compressed_tests() {
+        let g1 = G1::generator();
+        let compressed_bytes = g1.to_compressed_bytes();
+        let g1_1 = G1::from(compressed_bytes);
+        assert_eq!(g1, g1_1);
         let e = G1::from_hex("1 0546197CDBA187E858730894C66FAEB35E7DBE4C61646786FB85B3EBB78377B1711797A884CBE8302A23463FFFD00190 1 11CF30309EA1AF4BB47FC4D5219529347F9576201EE34DE933C96F83FBB8B2AC22387B593C5F148924B571FE605B337F 2 13317C30F3A0D636D56A23C34FDD80B891ECBDE7C2B7D6E16B0F4B0B7E6D26CB6147ACDE629C4A23C57400D203A9FB84".to_string()).unwrap();
-        let dst = DomainSeparationTag::new("hash_to_curve_", Some("test"), None, None).unwrap();
+        let compressed_bytes = e.to_compressed_bytes();
+        let e1 = G1::from(compressed_bytes);
+        assert_eq!(e, e1);
+    }
+
+    #[test]
+    fn test_hash_to_curve() {
+        let e = G1::from_hex("1 060595F69756F0528EAACAC84E6844CEBCB844042DC456EC738F7332221BF27CA38E6C3DC2FD8710FFE37ECB92779E46 1 153980BAF12F8EB31BBF9D8CACE7FB750AB76CEE4DD118CCB1A27637BE878544128ABDDA8F7E22A393B7920547BF6DEC 2 13317C30F3A0D636D56A23C34FDD80B891ECBDE7C2B7D6E16B0F4B0B7E6D26CB6147ACDE629C4A23C57400D203A9FB84".to_string()).unwrap();
+        let dst = DomainSeparationTag::new(b"hash_to_curve_", Some(b"test"), None, None).unwrap();
         let g = G1::hash_to_curve(b"message to be hashed", &dst);
         assert!(!g.is_identity());
         assert_eq!(e, g);
@@ -247,8 +306,8 @@ mod test {
     #[test]
     fn test_binary_scalar_mul() {
         for _ in 0..10 {
-            let a = FieldElement::random();
-            let b = FieldElement::random();
+            let a = CurveOrderElement::random();
+            let b = CurveOrderElement::random();
             let g = G1::random();
             let h = G1::random();
             assert_eq!(&g * &a + &h * &b, g.binary_scalar_mul(&h, &a, &b))
@@ -261,7 +320,7 @@ mod test {
             let a = G1::random();
             let mults = a.get_multiples(17);
             for i in 1..=17 {
-                assert_eq!(mults[i - 1], (&a * FieldElement::from(i as u8)));
+                assert_eq!(mults[i - 1], (&a * CurveOrderElement::from(i as u8)));
             }
         }
     }
@@ -274,12 +333,12 @@ mod test {
         let n = 64;
 
         for _ in 0..n {
-            fs.push(FieldElement::random());
+            fs.push(CurveOrderElement::random());
             gs.push(G1::random());
         }
 
         let gv = G1Vector::from(gs.as_slice());
-        let fv = FieldElementVector::from(fs.as_slice());
+        let fv = CurveOrderElementVector::from(fs.as_slice());
 
         let mut start = Instant::now();
         let res = gv.multi_scalar_mul_const_time_naive(&fv).unwrap();
@@ -297,7 +356,7 @@ mod test {
             .map(|e| e.to_wnaf_lookup_table(5))
             .collect();
 
-        let f_refs: Vec<&FieldElement> = fs.iter().map(|f| f).collect();
+        let f_refs: Vec<&CurveOrderElement> = fs.iter().map(|f| f).collect();
         start = Instant::now();
         let res_2 =
             G1Vector::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, f_refs)
@@ -359,12 +418,12 @@ mod test {
         let w = 5;
 
         for _ in 0..n {
-            fs.push(FieldElement::random());
+            fs.push(CurveOrderElement::random());
             gs.push(G1::random());
         }
 
         let gv = G1Vector::from(gs.as_slice());
-        let fv = FieldElementVector::from(fs.as_slice());
+        let fv = CurveOrderElementVector::from(fs.as_slice());
 
         let mut start = Instant::now();
         for i in 0..n {
