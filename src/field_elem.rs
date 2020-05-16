@@ -8,8 +8,8 @@ use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
 use amcl::arch::CHUNK;
 use amcl::rand::RAND;
+use core::fmt;
 use std::cmp::Ordering;
-use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, RangeBounds, Sub, SubAssign};
 use std::slice::Iter;
@@ -21,27 +21,23 @@ use crate::rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use zeroize::Zeroize;
 
-#[macro_export]
-macro_rules! add_field_elems {
-    ( $( $elem:expr ),* ) => {
-        {
-            let mut sum = FieldElement::new();
-            $(
-                sum += $elem;
-            )*
-            sum
-        }
-    };
-}
-
-#[derive(Clone, Debug)]
+/// Don't derive Copy trait as it can hold secret data and should not be accidentally copied
+#[derive(Clone)]
 pub struct FieldElement {
     value: BigNum,
 }
 
 impl fmt::Display for FieldElement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.value.fmt(f)
+        let big = self.value.clone();
+        write!(f, "BIG: [ {} ]", big.tostring())
+    }
+}
+
+impl fmt::Debug for FieldElement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let big = self.value.clone();
+        write!(f, "BIG: [ {} ]", big.tostring())
     }
 }
 
@@ -459,11 +455,11 @@ impl FieldElement {
     /// Returns hex string in big endian
     pub fn to_hex(&self) -> String {
         // TODO: Make constant time.
-        self.to_bignum().to_hex()
+        self.to_bignum().tostring()
     }
 
     /// Create big number from hex string in big endian
-    pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
+    pub fn from_hex(mut s: String) -> Result<Self, SerzDeserzError> {
         let mut f = Self::parse_hex_as_bignum(s)?;
         f.rmod(&CurveOrder);
         Ok(f.into())
@@ -471,18 +467,22 @@ impl FieldElement {
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction
     pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
-        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
-        barrett_reduction(&x, &CurveOrder, k, &u, &v)
+        barrett_reduction(
+            &x,
+            &CurveOrder,
+            *BarrettRedc_k,
+            &*BarrettRedc_u,
+            &*BarrettRedc_v,
+        )
     }
 
     /// Parse given hex string as BigNum in constant time.
-    pub fn parse_hex_as_bignum(val: String) -> Result<BigNum, SerzDeserzError> {
+    pub fn parse_hex_as_bignum(mut val: String) -> Result<BigNum, SerzDeserzError> {
         // Logic almost copied from AMCL but with error handling and constant time execution.
         // Constant time is important as hex is used during serialization and deserialization.
         // A seemingly effortless solution is to filter string for errors and pad with 0s before
         // passing to AMCL but that would be expensive as the string is scanned twice
 
-        let mut val = val;
         // Given hex cannot be bigger than max byte size
         if val.len() > FieldElement_SIZE * 2 {
             return Err(SerzDeserzError::FieldElementBytesIncorrectSize(
@@ -886,7 +886,10 @@ impl FieldElementVector {
     /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % curve_order
     pub fn inner_product(&self, b: &FieldElementVector) -> Result<FieldElement, ValueError> {
         check_vector_size_for_equality!(self, b)?;
-        let r = (0..b.len()).into_par_iter().map(|i| (&self[i] * &b[i])).reduce(|| FieldElement::new(), |a, b| a + b);
+        let r = (0..b.len())
+            .into_par_iter()
+            .map(|i| (&self[i] * &b[i]))
+            .reduce(|| FieldElement::new(), |a, b| a + b);
         Ok(r)
     }
 
@@ -1436,7 +1439,7 @@ mod test {
             res_mul = res_mul * e;
         }
         println!(
-            "Multiplication time for {} elems = {:?}",
+            "Multiplication time for {} field elems = {:?}",
             count,
             start.elapsed()
         );
@@ -1446,12 +1449,16 @@ mod test {
         for e in &elems {
             inverses.push(e.inverse());
         }
-        println!("Inverse time for {} elems = {:?}", count, start.elapsed());
+        println!(
+            "Inverse time for {} field elems = {:?}",
+            count,
+            start.elapsed()
+        );
 
         start = Instant::now();
         let (inverses_1, all_inv) = FieldElement::batch_invert(&elems);
         println!(
-            "Batch inverse time for {} elems = {:?}",
+            "Batch inverse time for {} field elems = {:?}",
             count,
             start.elapsed()
         );
@@ -1474,7 +1481,11 @@ mod test {
         for i in 0..count {
             R = &R + &points[i];
         }
-        println!("Addition time for {} elems = {:?}", count, start.elapsed());
+        println!(
+            "Addition time for {} field elems = {:?}",
+            count,
+            start.elapsed()
+        );
     }
 
     #[test]
@@ -1499,7 +1510,7 @@ mod test {
             let d = BigNum::mul(&a, &b);
             o1.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
         }
-        println!("Mul1 for {} elems = {:?}", count, start.elapsed());
+        println!("Mul1 for {} field elems = {:?}", count, start.elapsed());
 
         start = Instant::now();
         for i in 0..count {
@@ -1508,7 +1519,7 @@ mod test {
             let d = BigNum::mul(&a, &b);
             o2.push(barrett_reduction(&d, &CurveOrder, k, &u, &v));
         }
-        println!("Mul2 for {} elems = {:?}", count, start.elapsed());
+        println!("Mul2 for {} field elems = {:?}", count, start.elapsed());
 
         for i in 0..count {
             assert_eq!(BigNum::comp(&o1[i], &o2[i]), 0);
@@ -1523,7 +1534,7 @@ mod test {
             let d = BigNum::mul(&x, &b);
             x = barrett_reduction(&d, &CurveOrder, k, &u, &v);
         }
-        println!("Mul1 all for {} elems = {:?}", count, start.elapsed());
+        println!("Mul1 all for {} field elems = {:?}", count, start.elapsed());
 
         let mut y = BigNum::new_int(1isize);
         start = Instant::now();
@@ -1532,7 +1543,7 @@ mod test {
             let d = BigNum::mul(&y, &b);
             y = barrett_reduction(&d, &CurveOrder, k, &u, &v);
         }
-        println!("Mul2 all for {} elems = {:?}", count, start.elapsed());
+        println!("Mul2 all for {} field elems = {:?}", count, start.elapsed());
 
         assert_eq!(BigNum::comp(&x, &y), 0);
     }
@@ -1549,13 +1560,17 @@ mod test {
         for i in 0..count {
             r1.push(&fs[i] * &fs[i])
         }
-        println!("Mul time for {} elems = {:?}", count, start.elapsed());
+        println!("Mul time for {} field elems = {:?}", count, start.elapsed());
 
         let start = Instant::now();
         for i in 0..count {
             r2.push(fs[i].square())
         }
-        println!("Square time for {} elems = {:?}", count, start.elapsed());
+        println!(
+            "Square time for {} field elems = {:?}",
+            count,
+            start.elapsed()
+        );
         for i in 0..count {
             assert_eq!(r1[i], r2[i])
         }
@@ -1577,11 +1592,13 @@ mod test {
     fn test_parse_hex_as_bignum() {
         for _ in 0..100 {
             let b = FieldElement::random().to_bignum();
-            let h = b.clone().to_hex();
+            let h = b.clone().tostring();
             let b1 = FieldElement::parse_hex_as_bignum(h.clone()).unwrap();
-            let b2 = BigNum::from_hex(h);
-            assert_eq!(b, b2);
-            assert_eq!(b, b1);
+            let b2 = BigNum::fromstring(h);
+            // b == b2
+            assert_eq!(BigNum::comp(&b, &b2), 0);
+            // b == b1
+            assert_eq!(BigNum::comp(&b, &b1), 0);
         }
     }
 

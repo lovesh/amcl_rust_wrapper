@@ -8,8 +8,9 @@ use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::FieldElement;
 use crate::group_elem::GroupElement;
 use crate::group_elem_g1::G1;
+//use crate::group_elem_g2::{parse_hex_as_FP2, G2};
 use crate::group_elem_g2::{parse_hex_as_FP2, G2};
-use std::fmt;
+use core::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Mul;
 
@@ -25,7 +26,7 @@ pub struct GT {
 
 impl fmt::Debug for GT {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut c = self.value.clone();
+        let c = self.value.clone();
         write!(f, "{}", c.tostring())
     }
 }
@@ -71,11 +72,11 @@ impl GT {
             }
             another(&mut accum, &g2.to_ecp(), &g1.to_ecp());
         }
-        let e = miller(&accum);
+        let e = miller(&mut accum);
         Self { value: fexp(&e) }
     }
 
-    /// Inner product of 2 vectors in group G1 and G2.
+    /// Inner product of 2 vectors in group G1 and G2 where the product is the pairing operation
     /// Equivalent to a multi-pairing
     pub fn inner_product(left: &[G1], right: &[G2]) -> Result<Self, ValueError> {
         check_vector_size_for_equality!(left, right)?;
@@ -86,7 +87,7 @@ impl GT {
             }
             another(&mut accum, &g2.to_ecp(), &g1.to_ecp());
         }
-        let e = miller(&accum);
+        let e = miller(&mut accum);
         Ok(Self { value: fexp(&e) })
     }
 
@@ -173,20 +174,22 @@ impl GT {
     }
 
     pub fn to_hex(&self) -> String {
-        self.value.to_hex()
+        self.value.tostring()
     }
 
-    pub fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
-        let mut iter = s.split_whitespace();
-        let a = parse_hex_as_FP4(&mut iter)?;
-        let b = parse_hex_as_FP4(&mut iter)?;
-        let c = parse_hex_as_FP4(&mut iter)?;
-        let mut value = FP12::new();
-        value.seta(a);
-        value.setb(b);
-        value.setc(c);
-        value.settype(DENSE);
-        Ok(Self { value })
+    pub fn from_hex(mut string: String) -> Result<Self, SerzDeserzError> {
+        // Need string as "[a,b,c]"
+        unbound_bounded_string!(string, '[', ']', SerzDeserzError::CannotParseGT);
+
+        let (a, b, c) = split_string_to_3_tuple!(string, SerzDeserzError::CannotParseGT);
+
+        let a_fp4 = parse_hex_as_FP4(a)?;
+        let b_fp4 = parse_hex_as_FP4(b)?;
+        let c_fp4 = parse_hex_as_FP4(c)?;
+
+        Ok(Self {
+            value: FP12::new_fp4s(&a_fp4, &b_fp4, &c_fp4),
+        })
     }
 
     /// Return a random group element. Only for testing.
@@ -199,17 +202,15 @@ impl GT {
 }
 
 /// Parse given hex string as FP4
-pub fn parse_hex_as_FP4(iter: &mut SplitWhitespace) -> Result<FP4, SerzDeserzError> {
-    // Logic almost copied from AMCL but with error handling and constant time execution.
-    // Constant time is important as hex is used during serialization and deserialization.
-    // A seemingly effortless solution is to filter string for errors and pad with 0s before
-    // passing to AMCL but that would be expensive as the string is scanned twice
-    let a = parse_hex_as_FP2(iter)?;
-    let b = parse_hex_as_FP2(iter)?;
-    let mut fp4 = FP4::new();
-    fp4.seta(a);
-    fp4.setb(b);
-    Ok(fp4)
+pub fn parse_hex_as_FP4(mut string: String) -> Result<FP4, SerzDeserzError> {
+    // Need string as "[a,b]"
+    unbound_bounded_string!(string, '[', ']', SerzDeserzError::CannotParseFP4);
+
+    let (a, b) = split_string_to_2_tuple!(string, SerzDeserzError::CannotParseFP4);
+
+    let a_fp2 = parse_hex_as_FP2(a)?;
+    let b_fp2 = parse_hex_as_FP2(b)?;
+    Ok(FP4::new_fp2s(&a_fp2, &b_fp2))
 }
 
 impl PartialEq for GT {
@@ -218,7 +219,61 @@ impl PartialEq for GT {
     }
 }
 
-impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
+// impl_group_elem_conversions!(GT, GroupGT, GroupGT_SIZE);
+impl From<GroupGT> for GT {
+    fn from(x: GroupGT) -> Self {
+        Self { value: x }
+    }
+}
+
+impl From<&GroupGT> for GT {
+    fn from(x: &GroupGT) -> Self {
+        Self { value: x.clone() }
+    }
+}
+
+impl From<&[u8; GroupGT_SIZE]> for GT {
+    fn from(x: &[u8; GroupGT_SIZE]) -> Self {
+        Self {
+            value: GroupGT::frombytes(x),
+        }
+    }
+}
+
+impl Serialize for GT {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_newtype_struct("GT", &self.to_hex())
+    }
+}
+
+impl<'a> Deserialize<'a> for GT {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        struct GroupElemVisitor;
+
+        impl<'a> Visitor<'a> for GroupElemVisitor {
+            type Value = GT;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("GT")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<GT, E>
+            where
+                E: DError,
+            {
+                Ok(GT::from_hex(value.to_string()).map_err(DError::custom)?)
+            }
+        }
+
+        deserializer.deserialize_str(GroupElemVisitor)
+    }
+}
 
 impl_group_elem_traits!(GT, GroupGT);
 
@@ -448,6 +503,32 @@ mod test {
         p = p.pow(&r);
         assert_eq!(p1, p2);
         assert_eq!(p1, p);
+    }
+
+    #[test]
+    fn test_to_and_from_bytes() {
+        let count = 100;
+        for _ in 0..count {
+            let x = GT::random();
+            let mut bytes: [u8; GroupGT_SIZE] = [0; GroupGT_SIZE];
+            x.write_to_slice(&mut bytes).unwrap();
+
+            let y = GT::from(&bytes);
+            assert_eq!(x, y);
+
+            let bytes1 = x.to_bytes();
+            assert_eq!(x, GT::from_bytes(bytes1.as_slice()).unwrap());
+
+            // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
+            let mut bytes2 = bytes1.clone();
+            bytes2.push(0);
+            assert!(GT::from_bytes(&bytes2).is_err());
+            assert!(x.write_to_slice(&mut bytes2).is_err());
+
+            // Decrease length of byte vector
+            assert!(GT::from_bytes(&bytes2[0..GroupGT_SIZE - 4]).is_err());
+            assert!(x.write_to_slice(&mut bytes2[0..GroupGT_SIZE - 4]).is_err());
+        }
     }
 
     #[test]

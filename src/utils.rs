@@ -3,8 +3,12 @@ extern crate sha3;
 
 use rand::{CryptoRng, RngCore};
 
-use crate::constants::{CurveOrder, FieldElement_SIZE};
-use crate::types::{BigNum, DoubleBigNum};
+use crate::constants::{
+    BarrettRedc_FM_k, BarrettRedc_FM_u, BarrettRedc_FM_v, BigNumBits, CurveOrder, Ell,
+    FieldElement_SIZE, FieldModulus, DNLEN,
+};
+use crate::types::{BigNum, DoubleBigNum, GroupG1, FP};
+use amcl::hmac;
 use amcl::rand::RAND;
 
 use crate::errors::SerzDeserzError;
@@ -41,6 +45,58 @@ fn get_RAND(entropy_size: usize, entropy: &[u8]) -> RAND {
     r
 }
 
+/// Hash to one or more field elements, largely copied from miracl/core.
+/// Used in hash to curve
+pub fn hash_to_field(
+    hash: usize,
+    hlen: usize,
+    domain_separation_tag: &[u8],
+    msg: &[u8],
+    output: &mut [FP],
+    out_count: usize,
+) {
+    let mut okm: [u8; 256] = [0; 256];
+    let mut fd: [u8; 128] = [0; 128];
+
+    hmac::xmd_expand(
+        hash,
+        hlen,
+        &mut okm,
+        *Ell * out_count,
+        &domain_separation_tag,
+        &msg,
+    );
+    for i in 0..out_count {
+        for j in 0..*Ell {
+            fd[j] = okm[*Ell * i + j];
+        }
+        // Use Barrett reduction since the FieldModulus is fixed for a curve
+        let fp = FP::new_big(&barrett_reduction(
+            &DoubleBigNum::frombytes(&fd[0..*Ell]),
+            &FieldModulus,
+            *BarrettRedc_FM_k,
+            &*BarrettRedc_FM_u,
+            &*BarrettRedc_FM_v,
+        ));
+        output[i] = fp;
+    }
+}
+
+// set x = x mod 2^m
+fn mod2m(x: &mut DoubleBigNum, m: usize) {
+    // the limb to update
+    let limb_idx = m / BigNumBits;
+    // number of bits in limb at `limb_index` to keep the same as in `x`
+    let bt = m % BigNumBits;
+    // mask is all 1s
+    let msk = (1 << bt) - 1;
+    x.w[limb_idx] &= msk;
+    // Set the remaining bits to 0
+    for i in limb_idx + 1..DNLEN {
+        x.w[i] = 0
+    }
+}
+
 /// Perform Barrett reduction given the params computed from `barrett_reduction_params`. Algorithm 14.42 from Handbook of Applied Cryptography
 pub fn barrett_reduction(
     x: &DoubleBigNum,
@@ -50,7 +106,7 @@ pub fn barrett_reduction(
     v: &BigNum,
 ) -> BigNum {
     // q1 = floor(x / 2^{k-1})
-    let mut q1 = x.clone();
+    let mut q1 = DoubleBigNum::new_copy(x);
     q1.shr(k - 1);
     // Above right shift will convert q from DBIG to BIG
     let q1 = BigNum::new_dcopy(&q1);
@@ -58,18 +114,18 @@ pub fn barrett_reduction(
     let q2 = BigNum::mul(&q1, &u);
 
     // q3 = floor(q2 / 2^{k+1})
-    let mut q3 = q2.clone();
+    let mut q3 = DoubleBigNum::new_copy(&q2);
     q3.shr(k + 1);
     let q3 = BigNum::new_dcopy(&q3);
 
     // r1 = x % 2^{k+1}
-    let mut r1 = x.clone();
-    r1.mod2m(k + 1);
+    let mut r1 = DoubleBigNum::new_copy(x);
+    mod2m(&mut r1, k + 1);
     let r1 = BigNum::new_dcopy(&r1);
 
     // r2 = (q3 * modulus) % 2^{k+1}
     let mut r2 = BigNum::mul(&q3, modulus);
-    r2.mod2m(k + 1);
+    mod2m(&mut r2, k + 1);
     let r2 = BigNum::new_dcopy(&r2);
 
     // if r1 > r2, r = r1 - r2 else r = r1 - r2 + v
@@ -89,6 +145,7 @@ pub fn barrett_reduction(
         r = BigNum::minus(&r, modulus);
         r.norm();
     }
+    r.norm();
     r
 }
 
@@ -101,7 +158,7 @@ fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: 
     let q2 = BigNum::mul(&q1, &u);
 
     // q3 = floor(q2 / 2^{k+1})
-    let mut q3 = q2.clone();
+    let mut q3 = DoubleBigNum::new_copy(&q2);
     q3.shr(k + 1);
     let q3 = BigNum::new_dcopy(&q3);
 
@@ -111,13 +168,12 @@ fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: 
 
     // r2 = (q3 * modulus) % 2^{k+1}
     let mut r2 = BigNum::mul(&q3, modulus);
-    r2.mod2m(k + 1);
+    mod2m(&mut r2, k + 1);
     let r2 = BigNum::new_dcopy(&r2);
 
     // if r1 > r2, r = r1 - r2 else r = r1 - r2 + v
     // Since negative numbers are not supported, use r2 - r1. This holds since r = r1 - r2 + v = v - (r2 - r1)
     let diff = BigNum::comp(&r1, &r2);
-    //println!("diff={}", &diff);
     let mut r = if diff < 0 {
         let m = r2.minus(&r1);
         v.minus(&m)
@@ -131,6 +187,7 @@ fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: 
         r = BigNum::minus(&r, modulus);
         r.norm();
     }
+    r.norm();
     r
 }
 
@@ -155,6 +212,93 @@ pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
     v.shl(k + 1);
 
     (k, u, v)
+}
+
+/// Takes a collection of collections and pads them with the given element such that all collections are of same length.
+/// Returns the new length. Mutates the collections.
+#[macro_export]
+macro_rules! pad_collection {
+    ( $coll:expr, $pad:expr ) => {{
+        if $coll.len() > 0 {
+            // Find maximum length of a collection
+            let mut max_length = $coll[0].len();
+            for i in 1..$coll.len() {
+                if max_length < $coll[i].len() {
+                    max_length = $coll[i].len();
+                }
+            }
+            for i in 0..$coll.len() {
+                let l = $coll[i].len();
+                if l < max_length {
+                    // append might not unroll and hence perform slower
+                    //$coll[i].append(&mut vec![$pad; max_length - l]);
+                    for _ in 0..max_length - l {
+                        $coll[i].push($pad);
+                    }
+                }
+            }
+
+            max_length
+        } else {
+            0
+        }
+    }};
+}
+
+/// Checks the given string begins and ends with the given characters, i.e. "bounded" and removes
+/// the beginning and ending characters. Throws error if not "bounded"
+#[macro_export]
+macro_rules! unbound_bounded_string {
+    ( $string:ident, $start_bound:expr, $end_bound:expr, $error:expr ) => {
+        // Need $string as "<$start_bound>x,y<$end_bound>", so if $start_bound was '(' and
+        // $end_bound was ')', string should be (foo..bar....)
+        if !$string.starts_with($start_bound)
+            || !$string.ends_with($end_bound)
+            || !$string.len() < 2
+        {
+            return Err($error);
+        }
+        // Remove bounds
+        $string.remove(0);
+        $string.pop();
+    };
+}
+
+/// Expects the string to be a concatenation of 2 strings of equal length separated by comma and
+/// returns tuple of 2 strings
+#[macro_export]
+macro_rules! split_string_to_2_tuple {
+    ( $string:ident, $error:expr ) => {{
+        // Not using split to avoid cloning strings
+        let mut str_2 = $string.split_off($string.len() / 2);
+        if !str_2.starts_with(',') {
+            return Err($error);
+        }
+        // Remove ','
+        str_2.remove(0);
+        ($string, str_2)
+    }};
+}
+
+/// Expects the string to be a concatenation of 3 strings of equal length separated by commas and
+/// returns tuple of 3 strings
+#[macro_export]
+macro_rules! split_string_to_3_tuple {
+    ( $string:ident, $error:expr ) => {{
+        // Not using split to avoid cloning strings
+        let mut bc = $string.split_off($string.len() / 3);
+        if !bc.starts_with(',') {
+            return Err($error);
+        }
+        bc.remove(0);
+
+        let mut c = bc.split_off(bc.len() / 2);
+        if !c.starts_with(',') {
+            return Err($error);
+        }
+        c.remove(0);
+        ($string, bc, c)
+    }};
 }
 
 #[cfg(test)]
@@ -324,7 +468,7 @@ mod test {
 
         start = Instant::now();
         for x in &xs {
-            let mut y = x.clone();
+            let mut y = DoubleBigNum::new_copy(x);
             let z = y.dmod(&CurveOrder);
             reduced2.push(z);
         }

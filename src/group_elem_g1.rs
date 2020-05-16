@@ -1,12 +1,15 @@
-use crate::constants::{CurveOrder, GroupG1_SIZE};
+use crate::amcl::hmac;
+use crate::constants::{
+    CurveOrder, GroupG1_SIZE, CURVETYPE, G1_COMP_BYTE_SIZE, HASH_TYPE, MONTGOMERY,
+};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::group_elem::{GroupElement, GroupElementVector};
-use crate::types::{GroupG1, FP};
-use crate::utils::hash_msg;
+use crate::types::{BigNum, GroupG1, FP};
+use crate::utils::{hash_msg, hash_to_field};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 
-use std::fmt;
+use core::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
@@ -14,12 +17,18 @@ use crate::rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
-use std::str::{FromStr, SplitWhitespace};
 use zeroize::Zeroize;
 
-#[derive(Clone, Debug)]
+/// Don't derive Copy trait as it can hold secret data and should not be accidentally copied
+#[derive(Clone)]
 pub struct G1 {
     value: GroupG1,
+}
+
+impl fmt::Debug for G1 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ECP: [ {} ]", self.value.tostring())
+    }
 }
 
 impl GroupElement for G1 {
@@ -52,38 +61,12 @@ impl GroupElement for G1 {
         GroupG1::mapit(&hash_msg(msg)).into()
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes: [u8; GroupG1_SIZE] = [0; GroupG1_SIZE];
-        self.write_to_slice_unchecked(&mut bytes);
-        bytes.to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
-        if bytes.len() != GroupG1_SIZE {
-            return Err(SerzDeserzError::G1BytesIncorrectSize(
-                bytes.len(),
-                GroupG1_SIZE,
-            ));
-        }
-        Ok(GroupG1::frombytes(bytes).into())
-    }
-
-    fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError> {
-        if target.len() != GroupG1_SIZE {
-            return Err(SerzDeserzError::G1BytesIncorrectSize(
-                target.len(),
-                GroupG1_SIZE,
-            ));
-        }
-        self.write_to_slice_unchecked(target);
-        Ok(())
-    }
-
-    fn write_to_slice_unchecked(&self, target: &mut [u8]) {
-        let mut temp = GroupG1::new();
-        temp.copy(&self.value);
-        temp.tobytes(target, false);
-    }
+    impl_group_elem_byte_conversion_methods!(
+        GroupG1,
+        GroupG1_SIZE,
+        G1_COMP_BYTE_SIZE,
+        SerzDeserzError::G1BytesIncorrectSize
+    );
 
     fn add_assign_(&mut self, b: &Self) {
         self.value.add(&b.value);
@@ -119,20 +102,36 @@ impl GroupElement for G1 {
         self.value.dbl();
     }
 
+    /// Returns the string `infinity` if the element corresponds to a point at infinity
+    /// Returns `(x)` or `(x,y)` depending on the curve being a Montgomery curve or not.
+    /// `x` and `y` are hex representations of FP
     fn to_hex(&self) -> String {
-        self.value.to_hex()
+        self.value.tostring()
     }
 
-    fn from_hex(s: String) -> Result<Self, SerzDeserzError> {
-        let mut iter = s.split_whitespace();
-        let x = parse_hex_as_FP(&mut iter)?;
-        let y = parse_hex_as_FP(&mut iter)?;
-        let z = parse_hex_as_FP(&mut iter)?;
-        let mut value = GroupG1::new();
-        value.setpx(x);
-        value.setpy(y);
-        value.setpz(z);
-        Ok(Self { value })
+    fn from_hex(mut string: String) -> Result<Self, SerzDeserzError> {
+        if &string == "infinity" {
+            return Ok(Self::new());
+        }
+
+        unbound_bounded_string!(string, '(', ')', SerzDeserzError::CannotParseG1);
+
+        if CURVETYPE == MONTGOMERY {
+            // Only x coordinate is needed for Montgomery curves
+            let x_big = FieldElement::parse_hex_as_bignum(string)?;
+            Ok(Self {
+                value: GroupG1::new_big(&x_big),
+            })
+        } else {
+            // Assuming string as "x,y"
+            let (x, y) = split_string_to_2_tuple!(string, SerzDeserzError::CannotParseG1);
+
+            let x_big = FieldElement::parse_hex_as_bignum(x)?;
+            let y_big = FieldElement::parse_hex_as_bignum(y)?;
+            Ok(Self {
+                value: GroupG1::new_bigs(&x_big, &y_big),
+            })
+        }
     }
 
     fn negation(&self) -> Self {
@@ -159,11 +158,41 @@ impl G1 {
             .mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum())
             .into()
     }
+
+    /// Hashes a byte slice to a group element according to the hash to curve point IETF standard
+    /// https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/?include_text=1
+    /// `domain_separation_tag` should be unique between protocols as well as curves, eg. protocol A and
+    /// protocol B should use different `domain_separation_tag` while hashing to the same curve and
+    /// protocol A should use different `domain_separation_tag` while hashing to different curves.
+    /// Look at section 3.1 of the standard for more details
+    pub fn hash_to_curve(domain_separation_tag: &[u8], msg: &[u8]) -> G1 {
+        // Get 2 field elements as FP
+        let mut u: [FP; 2] = [FP::new(), FP::new()];
+        hash_to_field(
+            hmac::MC_SHA2,
+            HASH_TYPE,
+            domain_separation_tag,
+            msg,
+            &mut u,
+            2,
+        );
+
+        // Map each FP to a curve point and add the points
+        let mut P = GroupG1::map2point(&u[0]);
+        let P1 = GroupG1::map2point(&u[1]);
+        P.add(&P1);
+        // clear the cofactor of the addition point
+        P.cfp();
+
+        Self { value: P }
+    }
 }
 
 impl_group_elem_traits!(G1, GroupG1);
 
-impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE);
+impl_group_elem_serz!(G1, GroupG1, "G1");
+
+impl_group_elem_conversions!(G1, GroupG1, GroupG1_SIZE, G1_COMP_BYTE_SIZE);
 
 impl_group_elem_ops!(G1);
 
@@ -184,31 +213,6 @@ impl_group_elem_vec_ops!(G1, G1Vector);
 impl_group_elem_vec_product_ops!(G1, G1Vector, G1LookupTable);
 
 impl_group_elem_vec_conversions!(G1, G1Vector);
-
-/// Parse given hex string as FP
-pub fn parse_hex_as_FP(iter: &mut SplitWhitespace) -> Result<FP, SerzDeserzError> {
-    // Logic almost copied from AMCL but with error handling and constant time execution.
-    // Constant time is important as hex is used during serialization and deserialization.
-    // A seemingly effortless solution is to filter string for errors and pad with 0s before
-    // passing to AMCL but that would be expensive as the string is scanned twice
-    let xes = match iter.next() {
-        Some(i) => {
-            // Parsing as u32 since xes cannot be negative
-            match u32::from_str(i) {
-                Ok(xes) => xes as i32,
-                Err(_) => return Err(SerzDeserzError::CannotParseFP),
-            }
-        }
-        None => return Err(SerzDeserzError::CannotParseFP),
-    };
-
-    let x = match iter.next() {
-        Some(i) => FieldElement::parse_hex_as_bignum(i.to_string())?,
-        None => return Err(SerzDeserzError::CannotParseFP),
-    };
-
-    Ok(FP { x, xes })
-}
 
 #[cfg(test)]
 mod test {

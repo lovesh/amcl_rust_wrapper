@@ -2,8 +2,8 @@ use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
 use crate::field_elem::{FieldElement, FieldElementVector};
 use crate::rayon::iter::IntoParallelRefIterator;
+use core::cmp::max;
 use rayon::prelude::*;
-use std::cmp::max;
 
 /// Univariate polynomial represented with coefficients in a vector. The ith element of the vector is the coefficient of the ith degree term.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

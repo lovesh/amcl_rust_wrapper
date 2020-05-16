@@ -49,17 +49,21 @@ pub trait GroupElement: Clone + Sized {
     /// Hash an arbitrary sized message using SHAKE and return output as group element
     fn from_msg_hash(msg: &[u8]) -> Self;
 
-    /// Return byte representation as vector
-    fn to_bytes(&self) -> Vec<u8>;
+    /// Return byte representation as vector. If `compress` is true, compresses the point before
+    /// serializing to bytes.
+    fn to_bytes(&self, compress: bool) -> Vec<u8>;
 
-    /// Create an element from a byte representation
+    /// Create an element from a byte representation. Handles both compressed as well as
+    /// uncompressed
     fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError>;
 
-    /// Writes bytes to given slice. Raises exception when given slice is not of desired length.
-    fn write_to_slice(&self, target: &mut [u8]) -> Result<(), SerzDeserzError>;
+    /// Writes bytes to given slice. If `compress` is true, compresses the point before serializing
+    /// to bytes. Raises exception when given slice is not of desired length.
+    fn write_to_slice(&self, target: &mut [u8], compress: bool) -> Result<(), SerzDeserzError>;
 
-    /// Writes bytes to given slice. Will panic when given slice is not of desired length.
-    fn write_to_slice_unchecked(&self, target: &mut [u8]);
+    /// Writes bytes to given slice. If `compress` is true, compresses the point before serializing
+    /// to bytes. Will panic when given slice is not of desired length.
+    fn write_to_slice_unchecked(&self, target: &mut [u8], compress: bool);
 
     /// Add a group element to itself. `self = self + b`
     fn add_assign_(&mut self, b: &Self);
@@ -82,7 +86,7 @@ pub trait GroupElement: Clone + Sized {
 
     fn double_mut(&mut self);
 
-    /// Returns hex string as a sequence of FPs separated by whitespace.
+    /// Returns hex string as a sequence of FPs or FP2s enclosed by parenthesis.
     /// Each FP is itself a 2-tuple of strings separated by whitespace, 1st string is the excess and 2nd is a BigNum
     fn to_hex(&self) -> String;
 
@@ -105,7 +109,7 @@ pub trait GroupElement: Clone + Sized {
 
 #[macro_export]
 macro_rules! impl_group_elem_conversions {
-    ( $group_element:ident, $group:ident, $group_size:ident ) => {
+    ( $group_element:ident, $group:ident, $group_elem_byte_size:ident, $group_elem_comp_byte_size:ident ) => {
         impl From<$group> for $group_element {
             fn from(x: $group) -> Self {
                 Self { value: x }
@@ -118,8 +122,16 @@ macro_rules! impl_group_elem_conversions {
             }
         }
 
-        impl From<&[u8; $group_size]> for $group_element {
-            fn from(x: &[u8; $group_size]) -> Self {
+        impl From<&[u8; $group_elem_byte_size]> for $group_element {
+            fn from(x: &[u8; $group_elem_byte_size]) -> Self {
+                Self {
+                    value: $group::frombytes(x),
+                }
+            }
+        }
+
+        impl From<&[u8; $group_elem_comp_byte_size]> for $group_element {
+            fn from(x: &[u8; $group_elem_comp_byte_size]) -> Self {
                 Self {
                     value: $group::frombytes(x),
                 }
@@ -128,9 +140,9 @@ macro_rules! impl_group_elem_conversions {
 
         impl Hash for $group_element {
             fn hash<H: Hasher>(&self, state: &mut H) {
-                let mut bytes: [u8; $group_size] = [0; $group_size];
-                self.write_to_slice_unchecked(&mut bytes);
-                state.write(&self.to_bytes())
+                let mut bytes: [u8; $group_elem_comp_byte_size] = [0; $group_elem_comp_byte_size];
+                self.write_to_slice_unchecked(&mut bytes, true);
+                state.write(&self.to_bytes(true))
             }
         }
     };
@@ -147,7 +159,7 @@ macro_rules! impl_group_elem_traits {
 
         impl fmt::Display for $group_element {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                let mut c = self.value.clone();
+                let c = self.value.clone();
                 write!(f, "{}", c.tostring())
             }
         }
@@ -168,13 +180,20 @@ macro_rules! impl_group_elem_traits {
                 self.zeroize()
             }
         }
+    };
+}
 
+#[macro_export]
+macro_rules! impl_group_elem_serz {
+    ( $group_element:ident, $group:ident, $name:tt ) => {
         impl Serialize for $group_element {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: Serializer,
             {
-                serializer.serialize_newtype_struct("$group_element", &self.to_hex())
+                // TODO: Serialization should be of the compressed bytes
+                serializer.serialize_newtype_struct($name, &self.to_hex())
+                //serializer.serialize_bytes(&self.to_bytes(true))
             }
         }
 
@@ -189,7 +208,7 @@ macro_rules! impl_group_elem_traits {
                     type Value = $group_element;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("expected $group_element")
+                        formatter.write_str(&$name)
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<$group_element, E>
@@ -198,6 +217,22 @@ macro_rules! impl_group_elem_traits {
                     {
                         Ok($group_element::from_hex(value.to_string()).map_err(DError::custom)?)
                     }
+
+                    /*fn visit_bytes<E>(self, v: &[u8]) -> Result<$group_element, E>
+                    where
+                        E: DError,
+                    {
+                        println!("deserz bytes");
+                        Ok($group_element::from_bytes(v).map_err(DError::custom)?)
+                    }
+
+                    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<$group_element, E>
+                    where
+                        E: DError,
+                    {
+                        println!("deserz vec");
+                        Ok($group_element::from_bytes(&v).map_err(DError::custom)?)
+                    }*/
                 }
 
                 deserializer.deserialize_str(GroupElemVisitor)
@@ -211,7 +246,7 @@ macro_rules! impl_group_elem_ops {
     ( $group_element:ident ) => {
         impl PartialEq for $group_element {
             fn eq(&self, other: &$group_element) -> bool {
-                let l = self.clone();
+                let mut l = self.clone();
                 let mut r = other.clone();
                 l.value.equals(&mut r.value)
             }
@@ -353,6 +388,48 @@ macro_rules! impl_group_elem_ops {
                 t.neg();
                 t.into()
             }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_group_elem_byte_conversion_methods {
+    ( $amcl_group:ident, $group_elem_byte_size:ident, $group_elem_comp_byte_size:ident, $error:expr ) => {
+        fn to_bytes(&self, compress: bool) -> Vec<u8> {
+            if compress {
+                let mut bytes: [u8; $group_elem_comp_byte_size] = [0; $group_elem_comp_byte_size];
+                self.write_to_slice_unchecked(&mut bytes, compress);
+                bytes.to_vec()
+            } else {
+                let mut bytes: [u8; $group_elem_byte_size] = [0; $group_elem_byte_size];
+                self.write_to_slice_unchecked(&mut bytes, compress);
+                bytes.to_vec()
+            }
+        }
+
+        fn from_bytes(bytes: &[u8]) -> Result<Self, SerzDeserzError> {
+            if bytes.len() != $group_elem_byte_size && bytes.len() != $group_elem_comp_byte_size {
+                return Err($error(bytes.len()));
+            }
+            println!("from bytes {:?}", bytes);
+            Ok($amcl_group::frombytes(bytes).into())
+        }
+
+        fn write_to_slice(&self, target: &mut [u8], compress: bool) -> Result<(), SerzDeserzError> {
+            if !compress && (target.len() != $group_elem_byte_size) {
+                return Err($error(target.len()));
+            }
+            if compress && (target.len() != $group_elem_comp_byte_size) {
+                return Err($error(target.len()));
+            }
+            self.write_to_slice_unchecked(target, compress);
+            Ok(())
+        }
+
+        fn write_to_slice_unchecked(&self, target: &mut [u8], compress: bool) {
+            let mut temp = $amcl_group::new();
+            temp.copy(&self.value);
+            temp.tobytes(target, compress);
         }
     };
 }
@@ -927,9 +1004,9 @@ macro_rules! impl_group_elem_vec_conversions {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::constants::GroupG1_SIZE;
+    use crate::constants::{GroupG1_SIZE, G1_COMP_BYTE_SIZE};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
-    use crate::constants::{GroupG2_SIZE, GroupGT_SIZE};
+    use crate::constants::{GroupG2_SIZE, GroupGT_SIZE, G2_COMP_BYTE_SIZE};
     #[cfg(any(feature = "bls381", feature = "bn254"))]
     use crate::extension_field_gt::GT;
     use crate::group_elem_g1::{G1LookupTable, G1Vector, G1};
@@ -938,39 +1015,93 @@ mod test {
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
 
-    #[test]
+    /*#[test]
     fn test_to_and_from_bytes() {
         let count = 100;
         macro_rules! to_and_fro_bytes {
-            ( $group:ident, $group_size:ident ) => {
+            ( $group:ident, $group_size:ident, $compression_supported: expr ) => {
                 for _ in 0..count {
                     let x = $group::random();
                     let mut bytes: [u8; $group_size] = [0; $group_size];
+                    #[cfg($compression_supported == true)]
+                    x.write_to_slice(&mut bytes, false).unwrap();
+                    #[cfg($compression_supported == false)]
                     x.write_to_slice(&mut bytes).unwrap();
+
                     let y = $group::from(&bytes);
                     assert_eq!(x, y);
 
-                    let bytes1 = x.to_bytes();
+                    let bytes1 = x.to_bytes(false);
                     assert_eq!(x, $group::from_bytes(bytes1.as_slice()).unwrap());
 
                     // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
                     let mut bytes2 = bytes1.clone();
                     bytes2.push(0);
                     assert!($group::from_bytes(&bytes2).is_err());
+                    #[cfg($compression_supported == true)]
+                    assert!(x.write_to_slice(&mut bytes2, false).is_err());
+                    #[cfg($compression_supported == false)]
                     assert!(x.write_to_slice(&mut bytes2).is_err());
 
                     // Decrease length of byte vector
                     assert!($group::from_bytes(&bytes2[0..$group_size - 4]).is_err());
+                    #[cfg($compression_supported == true)]
+                    assert!(x.write_to_slice(&mut bytes2[0..$group_size - 4], false).is_err());
+                    #[cfg($compression_supported == false)]
                     assert!(x.write_to_slice(&mut bytes2[0..$group_size - 4]).is_err());
                 }
             };
         }
 
-        to_and_fro_bytes!(G1, GroupG1_SIZE);
+        to_and_fro_bytes!(G1, GroupG1_SIZE, true);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        to_and_fro_bytes!(G2, GroupG2_SIZE);
+        to_and_fro_bytes!(G2, GroupG2_SIZE, true);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        to_and_fro_bytes!(GT, GroupGT_SIZE);
+        to_and_fro_bytes!(GT, GroupGT_SIZE, false);
+    }*/
+
+    #[test]
+    fn test_to_and_from_bytes() {
+        let count = 100;
+        macro_rules! to_and_fro_bytes {
+            ( $group:ident, $group_size:ident, $compression_supported: expr ) => {
+                for _ in 0..count {
+                    let x = $group::random();
+                    let mut bytes: [u8; $group_size] = [0; $group_size];
+                    x.write_to_slice(&mut bytes, $compression_supported)
+                        .unwrap();
+
+                    let y = $group::from(&bytes);
+                    assert_eq!(x, y);
+
+                    let bytes1 = x.to_bytes($compression_supported);
+                    assert_eq!(x, $group::from_bytes(bytes1.as_slice()).unwrap());
+
+                    // Increase length of byte vector by adding a byte. Choice of byte is arbitrary
+                    let mut bytes2 = bytes1.clone();
+                    bytes2.push(0);
+                    assert!($group::from_bytes(&bytes2).is_err());
+                    assert!(x
+                        .write_to_slice(&mut bytes2, $compression_supported)
+                        .is_err());
+
+                    // Decrease length of byte vector
+                    assert!($group::from_bytes(&bytes2[0..$group_size - 4]).is_err());
+                    assert!(x
+                        .write_to_slice(&mut bytes2[0..$group_size - 4], $compression_supported)
+                        .is_err());
+                }
+            };
+        }
+
+        to_and_fro_bytes!(G1, G1_COMP_BYTE_SIZE, true);
+        to_and_fro_bytes!(G1, GroupG1_SIZE, false);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        to_and_fro_bytes!(G2, G2_COMP_BYTE_SIZE, true);
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        to_and_fro_bytes!(G2, GroupG2_SIZE, false);
+        // #[cfg(any(feature = "bls381", feature = "bn254"))]
+        // to_and_fro_bytes!(GT, GroupGT_SIZE, false);
     }
 
     #[test]
@@ -1112,14 +1243,19 @@ mod test {
     fn timing_group_elem_addition_and_scalar_multiplication() {
         let count = 100;
         macro_rules! add_mul {
-            ( $group:ident ) => {
+            ( $group:ident, $name:tt ) => {
                 let points: Vec<_> = (0..100).map(|_| $group::random()).collect();
                 let mut R = $group::random();
                 let mut start = Instant::now();
                 for i in 0..count {
                     R = R + &points[i];
                 }
-                println!("Addition time for {} elems = {:?}", count, start.elapsed());
+                println!(
+                    "Addition time for {} {} elems = {:?}",
+                    count,
+                    $name,
+                    start.elapsed()
+                );
 
                 let fs: Vec<_> = (0..100).map(|_| FieldElement::random()).collect();
                 start = Instant::now();
@@ -1127,16 +1263,17 @@ mod test {
                     &points[i] * &fs[i];
                 }
                 println!(
-                    "Scalar multiplication time for {} elems = {:?}",
+                    "Scalar multiplication time for {} {} elems = {:?}",
                     count,
+                    $name,
                     start.elapsed()
                 );
             };
         }
 
-        add_mul!(G1);
+        add_mul!(G1, "G1");
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        add_mul!(G2);
+        add_mul!(G2, "G2");
     }
 
     #[test]
@@ -1146,12 +1283,14 @@ mod test {
                 for _ in 0..100 {
                     let r = $group::random();
                     let h = r.to_hex();
-                    let r_ = $group::from_hex(h).unwrap();
+                    let r_ = $group::from_hex(h.clone()).unwrap();
                     assert_eq!(r, r_);
 
                     // Very unlikely that 2 randomly chosen elements will be equal
                     let s = $group::random();
+                    let h1 = s.to_hex();
                     assert_ne!(r, s);
+                    assert_ne!(h, h1);
                 }
             };
         }
@@ -1176,7 +1315,6 @@ mod test {
                     let s = $s_name { val: r.clone() };
 
                     let sz = serde_json::to_string(&s);
-
                     let st = sz.unwrap();
                     let g: $s_name = serde_json::from_str(&st).unwrap();
                     assert_eq!(g.val, r)
@@ -1189,6 +1327,48 @@ mod test {
         serz!(G2, S2);
         #[cfg(any(feature = "bls381", feature = "bn254"))]
         serz!(GT, ST);
+    }
+
+    #[test]
+    fn timing_hash_to_curve() {
+        let mut rng = rand::thread_rng();
+        let count = 100;
+        let mut msgs = vec![];
+        for i in 0..count {
+            let mut msg = vec![0; 100];
+            rng.fill_bytes(&mut msg.as_mut_slice());
+            msgs.push(msg);
+        }
+
+        macro_rules! hash_to_curve {
+            ( $group:ident, $name:tt, $dst:expr ) => {
+                let mut start = Instant::now();
+                for i in 0..count {
+                    let _ = $group::from_msg_hash(&msgs[i]);
+                }
+                println!(
+                    "mapit time for {} {} elems = {:?}",
+                    count,
+                    $name,
+                    start.elapsed()
+                );
+
+                start = Instant::now();
+                for i in 0..count {
+                    let _ = $group::hash_to_curve($dst, &msgs[i]);
+                }
+                println!(
+                    "hash_to_point time for {} {} elems = {:?}",
+                    count,
+                    $name,
+                    start.elapsed()
+                );
+            };
+        }
+
+        hash_to_curve!(G1, "G1", "G1_XMD:SHA256-SSWU-RO-_NUL_".as_bytes());
+        #[cfg(any(feature = "bls381", feature = "bn254"))]
+        hash_to_curve!(G2, "G2", "G2_XMD:SHA256-SSWU-RO-_NUL_".as_bytes());
     }
 
     #[test]
@@ -1288,22 +1468,24 @@ mod test {
     fn timing_vector_scaling() {
         let size = 30;
         macro_rules! scale {
-            ( $group_vec:ident ) => {
+            ( $group_vec:ident, $name:tt ) => {
                 let r = FieldElement::random();
                 let vector = $group_vec::random(size);
                 let start = Instant::now();
                 let s1 = vector.scaled_by(&r);
                 println!(
-                    "Constant time scaling for {} elems takes {:?}",
+                    "Constant time scaling for {} {} elems takes {:?}",
                     size,
+                    $name,
                     start.elapsed()
                 );
 
                 let start = Instant::now();
                 let s2 = vector.scaled_by_var_time(&r);
                 println!(
-                    "Variable time scaling for {} elems takes {:?}",
+                    "Variable time scaling for {} {} elems takes {:?}",
                     size,
+                    $name,
                     start.elapsed()
                 );
 
@@ -1313,8 +1495,8 @@ mod test {
                 assert_eq!(s1, s3)
             };
         }
-        scale!(G1Vector);
+        scale!(G1Vector, "G1Vector");
         #[cfg(any(feature = "bls381", feature = "bn254"))]
-        scale!(G2Vector);
+        scale!(G2Vector, "G2Vector");
     }
 }

@@ -1,6 +1,5 @@
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
-
 pub extern crate amcl;
 
 #[macro_use]
@@ -18,10 +17,8 @@ pub use amcl::secp256k1 as ECCurve;
 #[cfg(feature = "ed25519")]
 pub use amcl::ed25519 as ECCurve;
 
-extern crate serde;
-
 #[macro_use]
-extern crate serde_derive;
+extern crate serde;
 
 extern crate serde_json;
 
@@ -36,8 +33,6 @@ pub mod types;
 pub mod errors;
 
 #[macro_use]
-pub mod macros;
-
 pub mod utils;
 
 #[macro_use]
