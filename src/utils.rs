@@ -7,13 +7,12 @@ use crate::constants::{
     BarrettRedc_FM_k, BarrettRedc_FM_u, BarrettRedc_FM_v, BigNumBits, CurveOrder, Ell,
     FieldElement_SIZE, FieldModulus, DNLEN,
 };
-use crate::types::{BigNum, DoubleBigNum, GroupG1, FP};
+use crate::types::{BigNum, DoubleBigNum, FP};
 use amcl::hmac;
 use amcl::rand::RAND;
 
-use crate::errors::SerzDeserzError;
 use sha3::digest::{ExtendableOutput, Input, XofReader};
-use sha3::{Sha3_256, Shake256};
+use sha3::Shake256;
 
 /// Hash message and return output of size equal to curve modulus. Uses SHAKE to hash the message.
 pub fn hash_msg(msg: &[u8]) -> [u8; FieldElement_SIZE] {
@@ -25,7 +24,7 @@ pub fn hash_msg(msg: &[u8]) -> [u8; FieldElement_SIZE] {
 }
 
 pub fn get_seeded_RNG_with_rng<R: RngCore + CryptoRng>(entropy_size: usize, rng: &mut R) -> RAND {
-    // initialise from at least 128 byte string of raw random entropy
+    // initialize from at least 128 byte string of raw random entropy
     let mut entropy = vec![0; entropy_size];
     rng.fill_bytes(&mut entropy.as_mut_slice());
     get_RAND(entropy_size, entropy.as_slice())
@@ -372,7 +371,7 @@ mod test {
         start = Instant::now();
         for f in &fs {
             let mut i = f.clone();
-            i.inverse();
+            i.inverse(None);
             inverses_f.push(i);
         }
         println!("Inverse time for {} FPs = {:?}", count, start.elapsed());

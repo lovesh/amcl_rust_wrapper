@@ -2,7 +2,7 @@
 name = "amcl_wrapper"
 version = "0.4.0"
 authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
-description = "Wapper over Milagro Cryptographic Library (version 3)"
+description = "Wapper over Milagro Cryptographic Library, https://github.com/miracl/core"
 repository = "https://github.com/lovesh/amcl_rust_wrapper"
 
 license = "Apache-2.0"
@@ -34,6 +34,6 @@ subtle-encoding = "0.5.1"
 
 [dependencies.amcl]
 package = "miracl_core"
-version = "1.0.0"
-features = ["bls381", "bn254", "secp256k1", "ed25519"]
+version = "2.0.0"
+features = ["bls12381", "bn254", "secp256k1", "ed25519"]
 

@@ -9,7 +9,7 @@ extern crate lazy_static;
 pub use amcl::bn254 as ECCurve;
 
 #[cfg(feature = "bls381")]
-pub use amcl::bls381 as ECCurve;
+pub use amcl::bls12381 as ECCurve;
 
 #[cfg(feature = "secp256k1")]
 pub use amcl::secp256k1 as ECCurve;

@@ -1,7 +1,8 @@
 # amcl_rust_wrapper
 
-- Wraps some parts of [AMCL](https://github.com/miracl/amcl) to provide a nice abstraction to work with finite field elements and group elements when working with elliptic curves.   
-- Overloads +, -, *, +=, -= to use with field as well as group elements.  The overloaded operators correspond to constant time methods. But for scalar multiplication, variable time algorithms are present but can be used by calling methods only. 
+- Wraps some parts of [The MIRACL Core Cryptographic Library](https://github.com/miracl/core) to provide a nice abstraction to work with finite field elements and group elements when working with elliptic curves.
+- Overloads +, -, *, +=, -= to use with field as well as group elements.  The overloaded operators correspond to constant time methods. HOwever, for for scalar multiplication, variable time algorithms are present but can be used by calling methods only. 
+- Point compression and hash to curve according to the IETF standard through the Core library.
 - Provides abstraction for creating vectors of field elements or group (elliptic curve points) elements and then scale, add, subtract, take inner product or Hadamard product.
 - Supports creating univariate polynomials of field elements and doing arithmetic on them.
 - Some of the operations on vectors and polynomials are parallelized using [rayon](https://github.com/rayon-rs/rayon).
@@ -17,9 +18,15 @@ To build for BLS-381 curve, use
 cargo build --no-default-features --features bls381
 ```
 
-Similarly, to build for secp256k1, use
+For BN-254 curve, use 
+
 ```
-cargo build --no-default-features --features secp256k1
+cargo build --no-default-features --features bn254
+```
+
+Similarly, to build for ed25519, use
+```
+cargo build --no-default-features --features ed25519
 ```
 
 To run tests for secp256k1, use

@@ -197,7 +197,7 @@ impl G2 {
     /// protocol A should use different `domain_separation_tag` while hashing to different curves.
     /// Look at section 3.1 of the standard for more details
     pub fn hash_to_curve(dst: &[u8], msg: &[u8]) -> G2 {
-        // Get 4 field elements as FP
+        // Get 4 field elements as FP, section 5 of the standard
         let mut u: [FP; 4] = [FP::new(), FP::new(), FP::new(), FP::new()];
         hash_to_field(hmac::MC_SHA2, HASH_TYPE, dst, msg, &mut u, 4);
 
@@ -205,7 +205,7 @@ impl G2 {
         let fp2_1 = FP2::new_fps(&u[0], &u[1]);
         let fp2_2 = FP2::new_fps(&u[2], &u[3]);
 
-        // Map each FP2 to a curve point and add the points
+        // Map each FP2 to a curve point and add the points, section 6 of the standard
         let mut P = GroupG2::map2point(&fp2_1);
         let P1 = GroupG2::map2point(&fp2_2);
         P.add(&P1);
